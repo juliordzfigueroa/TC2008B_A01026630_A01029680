@@ -1,7 +1,7 @@
-# Movilidad Urbana – *Traffic Jam*  
-### Proyecto de Simulación de Tráfico con Sistema Multi-Agente  
-**Curso:** TC2008B – Modelación de sistemas multiagentes con gráficas computacionales (Gpo 302)
+# Movilidad Urbana – *Traffic Jam*
+### Proyecto de Simulación de Tráfico con Sistema Multi-Agente
 **Institución:** Tecnológico de Monterrey
+**Curso:** TC2008B – Modelación de sistemas multiagentes con gráficas computacionales (Gpo 302)
 
 ### Equipo de Reto
 
@@ -10,7 +10,7 @@
 | **Jin Sik Yoon** | A01026630 |
 | **Julio César Rodríguez Figueroa** | A01029680 |
 
-**Colaboradores académicos:**  
+**Profesores:**  
 - [@gilecheverria](https://github.com/gilecheverria)  
 - [@octavio-navarro](https://github.com/octavio-navarro)
 
@@ -81,6 +81,7 @@ Cada una de estas estrategias se podrá simular, visualizar y comparar en térmi
 | Herramienta | Uso principal |
 |--------------|----------------|
 | **Python 3** | Lógica del sistema multi-agente y simulación de tráfico |
+| **Solara** | Creación de dashboards y visualizaciones interactivas en Python |
 | **HTML / CSS / JavaScript** | Interfaz visual y animación del entorno 3D |
 | **Git / GitHub** | Control de versiones y colaboración |
 
@@ -88,11 +89,34 @@ Cada una de estas estrategias se podrá simular, visualizar y comparar en térmi
 
 ## Ejecución del Programa
 
-Sigue estos pasos para clonar y ejecutar el proyecto correctamente 👇
+Sigue estos pasos para clonar y ejecutar el proyecto correctamente:
 
 ### 1. Clonar el repositorio
 
-Abre tu terminal o VS Code y ejecuta el siguiente comando:
+Abre tu terminal o cualquier pragrama de visualización de código y ejecuta el siguiente comando:
 
 ```bash
-git clone https://github.com/juliordzfigueroa/TC2008B_A01026630_A01029680.git
+git clone git@github.com:juliordzfigueroa/TC2008B_A01026630_A01029680.git
+```
+### 2. Crear el entorno virtual
+
+```bash
+python -m venv .agents
+```
+### 3. Activar el entorno virtual
+
+```bash
+source .agents/bin/activate (En Mac o Linux)
+./.agents/Scripts/activate (En Windows)
+deactivate (Para desactivar)
+```
+### 4. Instalar dependencias
+
+```bash
+pip install -U "mesa[all]"
+```
+### 5. Ejecutar la simulación de Solara
+
+```bash
+solara run server.py
+```
