@@ -8,7 +8,7 @@
 
 'use strict';
 
-import { Object3D } from '../libs/object3d';
+import { Object3D } from './object3d';
 
 // Define the agent server URI
 const agent_server_uri = "http://localhost:8585/";

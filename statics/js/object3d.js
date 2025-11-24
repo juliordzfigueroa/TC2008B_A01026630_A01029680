@@ -7,9 +7,9 @@
 
 import * as twgl from 'twgl-base.js';
 
-import { M4 } from '../libs/3d-lib';
-import { cubeVertexColors, cubeFaceColors } from '../libs/shapes';
-import { loadObj } from '../libs/obj_loader';
+import { M4 } from './3d-lib';
+import { cubeVertexColors, cubeFaceColors } from './shapes';
+import { loadObj } from './obj_loader';
 
 class Object3D {
     constructor(id,
