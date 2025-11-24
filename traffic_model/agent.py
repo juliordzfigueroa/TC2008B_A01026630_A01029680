@@ -1,4 +1,5 @@
 from mesa import Agent
+import random
 
 class Car(Agent):
     """
@@ -15,7 +16,11 @@ class Car(Agent):
         """
         super().__init__(unique_id, model)
         self.model.grid.place_agent(self, start_pos)
-        self.target = self.model.random_destination()
+        if self.model.destinations: # Si hay destinos definidos, elegir uno aleatoriamente
+            self.target = random.choice(self.model.destinations)
+        else:
+            self.target = self.model.random_destination()
+        self.blocked_steps = 0
         self.route = self.model.dijkstra(self.pos, self.target)
         self.route_index = 0
         
@@ -47,9 +52,17 @@ class Car(Agent):
         """ 
         Define el comportamiento del coche en cada paso del modelo.
         """
+        # Si ya está en su destino, salir del modelo
+        if self.pos == self.target:
+            self.model.remove_car(self)
+            return
+    
         # Si no hay ruta o se llegó al destino, calcular nueva ruta
         if not self.route or self.route_index >= len(self.route):
-            self.target = self.model.random_destination()
+            if self.model.destinations:
+                self.target = random.choice(self.model.destinations)
+            else:
+                self.target = self.model.random_destination()
             self.route = self.model.dijkstra(self.pos, self.target)
             self.route_index = 0
             return
@@ -58,11 +71,24 @@ class Car(Agent):
 
         # Semáforos, autos, obstáculos
         if not self.freeCell(next_pos):
+            # Aumentar contador de bloqueo
+            self.blocked_steps += 1
+
+            # Si lleva muchos pasos bloqueado, buscar nueva ruta
+            if self.blocked_steps >= 5:
+                if self.model.destinations:
+                    self.target = random.choice(self.model.destinations)
+                else:
+                    self.target = self.model.random_destination()
+                self.route = self.model.dijkstra(self.pos, self.target)
+                self.route_index = 0
+                self.blocked_steps = 0
             return
 
         # Mover el auto
         self.model.grid.move_agent(self, next_pos)
         self.route_index += 1
+        self.blocked_steps = 0
 
 class Traffic_Light(Agent):
     """

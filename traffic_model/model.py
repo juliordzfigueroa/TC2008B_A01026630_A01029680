@@ -40,7 +40,7 @@ class CityModel(Model):
             self.width = len(lines[0].strip())
             self.height = len(lines)
 
-            self.grid = MultiGrid(self.width, self.height, torus = False) 
+            self.grid = MultiGrid(self.width, self.height, capacity = 100, torus = False) 
             self.schedule = RandomActivation(self)
 
             # Recorre cada carácter en el archivo del mapa y crea el agente correspondiente.
@@ -72,13 +72,25 @@ class CityModel(Model):
                         self.grid.place_agent(agent, (x, y))
                         self.destinations.append((x, y))
                     uid += 1
+        
+        # Identificar puntos de entrada (celdas de carretera en los bordes)
+        self.spawn_points = []
+        for x in range(self.width):
+            for y in range(self.height):
+                contents = self.grid.get_cell_list_contents((x, y))
+                for a in contents:
+                    if isinstance(a, Road):
+                        # Si está en el borde sin obstáculos, es un punto de entrada
+                        if x == 0 or x == self.width - 1 or y == 0 or y == self.height - 1:
+                            self.spawn_points.append((x, y))
+                        break
 
         # Construir el grafo de carreteras
         self.road_graph()
         
         # Crear vehículos
         for _ in range(NAgents):
-            self.add_vehicle()
+            self.add_vehicle_from_spawn()
         
         self.step_count = 0
         self.running = True
@@ -87,19 +99,38 @@ class CityModel(Model):
     def road_graph(self):
         self.graph = {}
 
-        for contents, (x, y) in self.grid.coord_iter():
-            if any(isinstance(a, Road) for a in contents):
-                neighbors = []
+        # Direcciones permitidas según la dirección de la calle
+        correctDireccion = {
+            "Up":    (0, 1),
+            "Down":  (0, -1),
+            "Right": (1, 0),
+            "Left":  (-1, 0),
+        }
 
-                for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
-                    nx, ny = x + dx, y + dy
-                    if self.grid.in_bounds((nx, ny)):
-                        neigh = self.grid.get_cell_list_contents((nx, ny))
-                        if any(isinstance(a, Road) for a in neigh):
-                            neighbors.append((nx, ny))
+        for cell_contents, x, y in self.grid.coord_iter():
+            # Buscar la carretera en esta celda
+            road_agent = None
+            for a in cell_contents:
+                if isinstance(a, Road):
+                    road_agent = a
+                    break
 
-                self.graph[(x, y)] = neighbors
-    
+            if road_agent is None:
+                continue
+
+            neighbors = []
+
+            # Solo permitimos avanzar en la dirección de la calle
+            dx, dy = correctDireccion.get(road_agent.direction, (0, 0))
+            nx, ny = x + dx, y + dy
+
+            if self.grid.in_bounds((nx, ny)):
+                neigh = self.grid.get_cell_list_contents((nx, ny))
+                if any(isinstance(a, Road) for a in neigh):
+                    neighbors.append((nx, ny))
+
+            self.graph[(x, y)] = neighbors
+
     # Selccionar un destino aleatorio
     def random_destination(self):
         if not self.graph:
@@ -142,22 +173,32 @@ class CityModel(Model):
         return path
     
     # Crear un nuevo vehículo
-
     def new_vehicle_id(self):
         vid = self.next_vehicle_id
         self.next_vehicle_id += 1
         return vid
     
-    def add_vehicle(self):
-        while True:
-            x = random.randrange(self.width)
-            y = random.randrange(self.height)
-            cell_contents = self.grid.get_cell_list_contents((x, y))
-            if any(isinstance(a, Road) for a in cell_contents):
-                break
+    def add_vehicle_from_spawn(self):
+        """
+        Crear un coche en un punto de spawn libre.
+        """
+        random.shuffle(self.spawn_points)
 
-        car = Car(self.new_vehicle_id(), self, (x, y))
-        self.schedule.add(car)
+        for (x, y) in self.spawn_points:
+            cell_contents = self.grid.get_cell_list_contents((x, y))
+            # Debe de ser Road, no obstáculos ni otros coches
+            if any(isinstance(a, Road) for a in cell_contents) and not any(isinstance(a, Car) for a in cell_contents):
+                car = Car(self.new_vehicle_id(), self, (x, y))
+                self.schedule.add(car)
+                return True
+
+        # Si no se pudo agregar ningún coche, retornar False
+        return False
+    
+    # Eliminar un coche del modelo
+    def remove_car(self, car: Car):
+        self.grid.remove_agent(car)
+        self.schedule.remove(car)
 
     def step(self):
         """
@@ -165,3 +206,10 @@ class CityModel(Model):
         """
         self.schedule.step()
         self.step_count += 1
+
+        # Cada 10 pasos, intentar agregar un nuevo coche
+        if self.step_count % 10 == 0:
+            spawned = self.add_vehicle_from_spawn()
+            if not spawned:
+                # Si ya no se pueden agregar más vehículos, detener simulación
+                self.running = False
