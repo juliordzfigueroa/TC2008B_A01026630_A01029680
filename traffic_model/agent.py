@@ -2,59 +2,113 @@ from mesa import Agent
 
 class Car(Agent):
     """
-    Agent that moves randomly.
-    Attributes:
-        unique_id: Agent's ID 
-        direction: Randomly chosen direction chosen from one of eight directions
+    Agente Car. Representa un coche en el modelo de tráfico.
+    Se aplica el algoritmo Dijkstra para encontrar la ruta más corta desde la posición actual hasta el destino.
     """
-    def __init__(self, unique_id, model):
+    def __init__(self, unique_id, model, start_pos):
         """
-        Creates a new random agent.
+        Crea un nuevo agente aleatorio.
         Args:
-            unique_id: The agent's ID
-            model: Model reference for the agent
+            unique_id: ID del agente
+            model: Referencia al modelo del agente
+            start_pos: Posición inicial del coche en la cuadrícula
+            direction: Dirección en la que se moverá el coche
         """
         super().__init__(unique_id, model)
+        self.model.grid.place_agent(self, start_pos)
+        self.target = self.model.random_destination()
+        self.route = self.model.shortest_path(self.pos, self.target)
+        self.route_index = 0
 
-    def move(self):
-        """ 
-        Determines if the agent can move in the direction that was chosen
-        """        
-        self.model.grid.move_to_empty(self)
+    def get_next_position(self):
+        """
+        Calcula la siguiente posición del coche basado en su dirección actual.
+        Regresa la siguiente posición (x, y) del coche.
+        """
+        x, y = self.pos
+        if self.direction == "Right":
+            return (x, y + 1)
+        elif self.direction == "Left":
+            return (x, y - 1)
+        elif self.direction == "Up":
+            return (x + 1, y)
+        elif self.direction == "Down":
+            return (x - 1, y)
+        else:
+            return (x, y)
+        
+    def freeCell(self, pos):
+        """
+        Verifica si se puede entrar a la celda
+        """
+        if not self.model.grid.in_bounds(pos):
+            return False
+
+        cell_agents = self.model.grid.get_cell_list_contents(pos)
+
+        # Si hay otro coche, bloquear
+        if any(isinstance(a, Car) for a in cell_agents):
+            return False
+
+        # Si hay un obstáculo, bloquear
+        if any(isinstance(a, Obstacle) for a in cell_agents):
+            return False
+
+        # Si hay un semáforo en rojo, bloquear
+        for a in cell_agents:
+            if isinstance(a, Traffic_Light) and a.state == 0:
+                return False
+
+        return True
 
     def step(self):
         """ 
-        Determines the new direction it will take, and then moves
+        Define el comportamiento del coche en cada paso del modelo.
         """
-        self.move()
+        # Si no hay ruta o se llegó al destino, calcular nueva ruta
+        if not self.route or self.route_index >= len(self.route):
+            self.target = self.model.random_destination()
+            self.route = self.model.shortest_path(self.pos, self.target)
+            self.route_index = 0
+            return
+
+        next_pos = self.route[self.route_index]
+
+        # Semáforos, autos, obstáculos
+        if not self.freeCell(next_pos):
+            return
+
+        # Mover el auto
+        self.model.grid.move_agent(self, next_pos)
+        self.route_index += 1
 
 class Traffic_Light(Agent):
     """
-    Traffic light. Where the traffic lights are in the grid.
+    Semáforo. Donde están los semáforos en la cuadrícula.
     """
-    def __init__(self, unique_id, model, state = False, timeToChange = 10):
+    def __init__(self, unique_id, model, initial_state, timeToChange):
         super().__init__(unique_id, model)
         """
-        Creates a new Traffic light.
+        Creamos un nuevo semáforo.
         Args:
-            unique_id: The agent's ID
-            model: Model reference for the agent
-            state: Whether the traffic light is green or red
-            timeToChange: After how many step should the traffic light change color 
+            unique_id: ID del agente
+            model: Referencia al modelo del agente
+            initial_state: Estado inicial del semáforo (verde o rojo)
+            timeToChange: Después de cuántos pasos debe cambiar el semáforo de color
         """
-        self.state = state
+        self.state = initial_state
         self.timeToChange = timeToChange
 
     def step(self):
         """ 
-        To change the state (green or red) of the traffic light in case you consider the time to change of each traffic light.
+        Cambia el estado del semáforo después de un número determinado de pasos.
         """
         if self.model.schedule.steps % self.timeToChange == 0:
             self.state = not self.state
 
 class Destination(Agent):
     """
-    Destination agent. Where each car should go.
+    Agente Destination. Donde los coches quieren llegar.
     """
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
@@ -64,7 +118,7 @@ class Destination(Agent):
 
 class Obstacle(Agent):
     """
-    Obstacle agent. Just to add obstacles to the grid.
+    Agente Obstacle. Donde hay obstáculos o edificios en la cuadrícula.
     """
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
@@ -74,15 +128,15 @@ class Obstacle(Agent):
 
 class Road(Agent):
     """
-    Road agent. Determines where the cars can move, and in which direction.
+    Agente Road. Donde los coches pueden moverse.
     """
-    def __init__(self, unique_id, model, direction= "Left"):
+    def __init__(self, unique_id, model, direction):
         """
-        Creates a new road.
+        Creamos el agente Road.
         Args:
-            unique_id: The agent's ID
-            model: Model reference for the agent
-            direction: Direction where the cars can move
+            unique_id: ID del agente
+            model: Referencia al modelo del agente
+            direction: Dirección en la que se puede mover el coche
         """
         super().__init__(unique_id, model)
         self.direction = direction
