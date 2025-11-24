@@ -12,20 +12,19 @@
 
 import * as twgl from 'twgl-base.js';
 import GUI from 'lil-gui';
-import { M4 } from '../libs/3d-lib';
-import { Scene3D } from '../libs/scene3d';
-import { Object3D } from '../libs/object3d';
-import { Camera3D } from '../libs/camera3d';
+import { M4 } from './3d-lib.js';
+import { Scene3D } from './scene3d.js';
+import { Object3D } from './object3d.js';
+import { Camera3D } from './camera3d.js';
 
-// Functions and arrays for the communication with the API
 import {
   agents, obstacles, initAgentsModel,
   update, getAgents, getObstacles
-} from '../libs/api_connection.js';
+} from './api_connection.js';
 
 // Define the shader code, using GLSL 3.00
-import vsGLSL from '../assets/shaders/vs_color.glsl?raw';
-import fsGLSL from '../assets/shaders/fs_color.glsl?raw';
+import vsGLSL from './shaders/vs_color.glsl?raw';
+import fsGLSL from './shaders/fs_color.glsl?raw';
 
 const scene = new Scene3D();
 

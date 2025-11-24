@@ -114,7 +114,8 @@ class Road(FixedAgent):
     """
     Carretera fija con dirección
     """
-    def __init__(self, model, cell, direction="Left"):
+    def __init__(self, unique_id, model, cell, direction="Left"):
         super().__init__(model)
         self.cell = cell
         self.direction = direction
+        self.unique_id = unique_id
