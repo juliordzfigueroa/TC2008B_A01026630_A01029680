@@ -1,153 +1,120 @@
-from mesa import Agent
+from mesa.discrete_space import CellAgent, FixedAgent
 import random
 
-class Car(Agent):
+class Car(CellAgent):
     """
-    Agente Car. Representa un coche en el modelo de tráfico.
-    Se aplica el algoritmo Dijkstra para encontrar la ruta más corta desde la posición actual hasta el destino.
+    Agente móvil que representa un carro.
     """
-    def __init__(self, unique_id, model, start_pos):
-        """
-        Crea un nuevo agente aleatorio.
-        Args:
-            unique_id: ID del agente
-            model: Referencia al modelo del agente
-            start_pos: Posición inicial del coche en la cuadrícula
-        """
-        super().__init__(unique_id, model)
-        self.model.grid.place_agent(self, start_pos)
-        if self.model.destinations: # Si hay destinos definidos, elegir uno aleatoriamente
-            self.target = random.choice(self.model.destinations)
-        else:
-            self.target = self.model.random_destination()
-        self.blocked_steps = 0
-        self.route = self.model.dijkstra(self.pos, self.target)
+    def __init__(self, model, cell):
+        super().__init__(model)
+        self.cell = cell
+        self.target = None
+        self.route = []
         self.route_index = 0
+        self.blocked_steps = 0
+
+    @property
+    def pos(self):
+        return tuple(self.cell.pos)
+
+    def freeCell(self, cell):
+        """
+        Comprueba si el carro puede avanzar al cell dado.
+        """
+        # Si hay un carro, bloqueo
+        if any(isinstance(a, Car) for a in cell.agents):
+            return False
         
-    def freeCell(self, pos):
-        """
-        Verifica si se puede entrar a la celda
-        """
-        if not self.model.grid.in_bounds(pos):
+        # Si hay un obstáculo, bloqueo
+        if any(isinstance(a, Obstacle) for a in cell.agents):
             return False
 
-        cell_agents = self.model.grid.get_cell_list_contents(pos)
-
-        # Si hay otro coche, bloquear
-        if any(isinstance(a, Car) for a in cell_agents):
-            return False
-
-        # Si hay un obstáculo, bloquear
-        if any(isinstance(a, Obstacle) for a in cell_agents):
-            return False
-
-        # Si hay un semáforo en rojo, bloquear
-        for a in cell_agents:
-            if isinstance(a, Traffic_Light) and a.state == 0:
+        # Si hay semáforo en rojo, bloqueo
+        for a in cell.agents:
+            if isinstance(a, Traffic_Light) and a.state == False:
                 return False
-
+        
         return True
 
     def step(self):
-        """ 
-        Define el comportamiento del coche en cada paso del modelo.
         """
-        # Si ya está en su destino, salir del modelo
-        if self.pos == self.target:
+        Comportamiento del coche en cada paso.
+        """
+        # Si ya llegó al destino
+        if self.target and self.pos == self.target:
             self.model.remove_car(self)
             return
-    
-        # Si no hay ruta o se llegó al destino, calcular nueva ruta
+
+        # Si no hay ruta o se terminó la ruta
         if not self.route or self.route_index >= len(self.route):
-            if self.model.destinations:
-                self.target = random.choice(self.model.destinations)
-            else:
-                self.target = self.model.random_destination()
+            # elegir destino nuevo
+            self.target = random.choice(self.model.destinations) \
+                if self.model.destinations else self.model.random_destination()
+
             self.route = self.model.dijkstra(self.pos, self.target)
             self.route_index = 0
             return
 
+        # Siguiente celda a mover
         next_pos = self.route[self.route_index]
+        next_cell = self.model.grid[next_pos]
 
-        # Semáforos, autos, obstáculos
-        if not self.freeCell(next_pos):
-            # Aumentar contador de bloqueo
+        # Checar si hay bloqueo
+        if not self.freeCell(next_cell):
             self.blocked_steps += 1
 
-            # Si lleva muchos pasos bloqueado, buscar nueva ruta
             if self.blocked_steps >= 5:
-                if self.model.destinations:
-                    self.target = random.choice(self.model.destinations)
-                else:
-                    self.target = self.model.random_destination()
+                self.target = random.choice(self.model.destinations) \
+                    if self.model.destinations else self.model.random_destination()
                 self.route = self.model.dijkstra(self.pos, self.target)
                 self.route_index = 0
                 self.blocked_steps = 0
             return
 
-        # Mover el auto
-        self.model.grid.move_agent(self, next_pos)
+        # Moverse a la siguiente celda
+        self.cell = next_cell
         self.route_index += 1
         self.blocked_steps = 0
 
-class Traffic_Light(Agent):
+
+class Traffic_Light(FixedAgent):
     """
-    Semáforo. Donde están los semáforos en la cuadrícula.
+    Semáforo fijo.
     """
-    def __init__(self, unique_id, model, initial_state, timeToChange):
-        super().__init__(unique_id, model)
-        """
-        Creamos un nuevo semáforo.
-        Args:
-            unique_id: ID del agente
-            model: Referencia al modelo del agente
-            initial_state: Estado inicial del semáforo (verde o rojo)
-            timeToChange: Después de cuántos pasos debe cambiar el semáforo de color
-        """
-        self.state = initial_state
+    def __init__(self, model, cell, state=False, timeToChange=10):
+        super().__init__(model)
+        self.cell = cell
+        self.state = state
         self.timeToChange = timeToChange
 
     def step(self):
-        """ 
-        Cambia el estado del semáforo después de un número determinado de pasos.
-        """
-        if self.model.schedule.steps % self.timeToChange == 0:
+        if self.model.steps % self.timeToChange == 0:
             self.state = not self.state
 
-class Destination(Agent):
-    """
-    Agente Destination. Donde los coches quieren llegar.
-    """
-    def __init__(self, unique_id, model):
-        super().__init__(unique_id, model)
 
-    def step(self):
-        pass
+class Destination(FixedAgent):
+    """
+    Lugar de destino
+    """
+    def __init__(self, model, cell):
+        super().__init__(model)
+        self.cell = cell
 
-class Obstacle(Agent):
-    """
-    Agente Obstacle. Donde hay obstáculos o edificios en la cuadrícula.
-    """
-    def __init__(self, unique_id, model):
-        super().__init__(unique_id, model)
 
-    def step(self):
-        pass
+class Obstacle(FixedAgent):
+    """
+    Obstáculo fijo
+    """
+    def __init__(self, model, cell):
+        super().__init__(model)
+        self.cell = cell
 
-class Road(Agent):
+
+class Road(FixedAgent):
     """
-    Agente Road. Donde los coches pueden moverse.
+    Carretera fija con dirección
     """
-    def __init__(self, unique_id, model, direction):
-        """
-        Creamos el agente Road.
-        Args:
-            unique_id: ID del agente
-            model: Referencia al modelo del agente
-            direction: Dirección en la que se puede mover el coche
-        """
-        super().__init__(unique_id, model)
+    def __init__(self, model, cell, direction="Left"):
+        super().__init__(model)
+        self.cell = cell
         self.direction = direction
-
-    def step(self):
-        pass
