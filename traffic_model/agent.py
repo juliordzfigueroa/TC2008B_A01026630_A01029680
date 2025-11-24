@@ -12,30 +12,12 @@ class Car(Agent):
             unique_id: ID del agente
             model: Referencia al modelo del agente
             start_pos: Posición inicial del coche en la cuadrícula
-            direction: Dirección en la que se moverá el coche
         """
         super().__init__(unique_id, model)
         self.model.grid.place_agent(self, start_pos)
         self.target = self.model.random_destination()
-        self.route = self.model.shortest_path(self.pos, self.target)
+        self.route = self.model.dijkstra(self.pos, self.target)
         self.route_index = 0
-
-    def get_next_position(self):
-        """
-        Calcula la siguiente posición del coche basado en su dirección actual.
-        Regresa la siguiente posición (x, y) del coche.
-        """
-        x, y = self.pos
-        if self.direction == "Right":
-            return (x, y + 1)
-        elif self.direction == "Left":
-            return (x, y - 1)
-        elif self.direction == "Up":
-            return (x + 1, y)
-        elif self.direction == "Down":
-            return (x - 1, y)
-        else:
-            return (x, y)
         
     def freeCell(self, pos):
         """
@@ -68,7 +50,7 @@ class Car(Agent):
         # Si no hay ruta o se llegó al destino, calcular nueva ruta
         if not self.route or self.route_index >= len(self.route):
             self.target = self.model.random_destination()
-            self.route = self.model.shortest_path(self.pos, self.target)
+            self.route = self.model.dijkstra(self.pos, self.target)
             self.route_index = 0
             return
 
