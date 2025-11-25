@@ -55,10 +55,10 @@ async function initAgentsModel() {
 /*
  * Retrieves the current positions of all agents from the agent server.
  */
-async function getAgents() {
+async function getCars() {
     try {
         // Send a GET request to the agent server to retrieve the agent positions
-        let response = await fetch(agent_server_uri + "getAgents");
+        let response = await fetch(agent_server_uri + "getCars");
 
         // Check if the response was successful
         if (response.ok) {
@@ -132,6 +132,55 @@ async function getObstacles() {
     }
 }
 
+async function getTrafficLights() {
+    try {
+        let response = await fetch(agent_server_uri + "getTrafficLights");
+
+        if (response.ok) {
+            let result = await response.json();
+
+            for (const light of result.positions) {
+                const newLight = new Object3D(light.id, [light.x, light.y, light.z]);
+                obstacles.push(newLight);
+            }
+        }
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+async function getDestinations() {
+    try {
+        let response = await fetch(agent_server_uri + "getDestinations");
+        if (response.ok) {
+            let result = await response.json();
+
+            for (const dest of result.positions) {
+                const newDest = new Object3D(dest.id, [dest.x, dest.y, dest.z]);
+                obstacles.push(newDest);
+            }
+        }
+    } catch (error) {   
+        console.log(error);
+    }
+}
+
+async function getRoads() {
+    try {
+        let response = await fetch(agent_server_uri + "getRoads");
+        if (response.ok) {
+            let result = await response.json();
+
+            for (const road of result.positions) {
+                const newRoad = new Object3D(road.id, [road.x, road.y, road.z]);
+                obstacles.push(newRoad);
+            }
+        }
+    } catch (error) {
+        console.log(error);
+    }
+}
+
 /*
  * Updates the agent positions by sending a request to the agent server.
  */
@@ -143,7 +192,7 @@ async function update() {
         // Check if the response was successful
         if (response.ok) {
             // Retrieve the updated agent positions
-            await getAgents();
+            await getCars();
             // Log a message indicating that the agents have been updated
             //console.log("Updated agents");
         }
@@ -154,4 +203,4 @@ async function update() {
     }
 }
 
-export { agents, obstacles, initAgentsModel, update, getAgents, getObstacles };
+export { agents, obstacles, initAgentsModel, update, getCars, getObstacles, getTrafficLights, getDestinations, getRoads };
