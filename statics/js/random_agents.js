@@ -1,10 +1,10 @@
 /*
- * Base program for a 3D scene that connects to an API to get the movement
- * of agents.
- * The scene shows colored cubes
+ * Base program for a 3D scene that connects to an API to get the movement of the city simulation.
  *
- * Gilberto Echeverria
- * 2025-11-08
+ * Jin Sik Yoon A01026630
+ * Julio César Rodríguez Figueroa A01029680
+ * 
+ * 25/11/2025
  */
 
 
@@ -23,9 +23,9 @@ import {
   getTrafficLights, getDestinations, getRoads
 } from './api_connection.js';
 
-// Define the shader code, using GLSL 3.00
-import vsGLSL from './shaders/vs_color.glsl?raw';
-import fsGLSL from './shaders/fs_color.glsl?raw';
+// Shaders usados in the program
+import vsGLSL from './shaders/vs_phong_302.glsl?raw';
+import fsGLSL from './shaders/fs_phong_302.glsl?raw';
 
 const scene = new Scene3D();
 
@@ -64,7 +64,7 @@ async function main() {
   // Initialize the agents model
   await initAgentsModel();
 
-  // Get the agents and obstacles
+  // Get the agents and obstacles, traffic lights, destinations and roads from the server
   await getCars();
   await getObstacles();
   await getTrafficLights();
@@ -175,16 +175,6 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   let v3_tra = object.posArray;
   let v3_sca = object.scaArray;
 
-  /*
-  // Animate the rotation of the objects
-  object.rotDeg.x = (object.rotDeg.x + settings.rotationSpeed.x * fract) % 360;
-  object.rotDeg.y = (object.rotDeg.y + settings.rotationSpeed.y * fract) % 360;
-  object.rotDeg.z = (object.rotDeg.z + settings.rotationSpeed.z * fract) % 360;
-  object.rotRad.x = object.rotDeg.x * Math.PI / 180;
-  object.rotRad.y = object.rotDeg.y * Math.PI / 180;
-  object.rotRad.z = object.rotDeg.z * Math.PI / 180;
-  */
-
   // Create the individual transform matrices
   const scaMat = M4.scale(v3_sca);
   const rotXMat = M4.rotationX(object.rotRad.x);
@@ -192,30 +182,61 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   const rotZMat = M4.rotationZ(object.rotRad.z);
   const traMat = M4.translation(v3_tra);
 
-  // Create the composite matrix with all transformations
-  let transforms = M4.identity();
-  transforms = M4.multiply(scaMat, transforms);
-  transforms = M4.multiply(rotXMat, transforms);
-  transforms = M4.multiply(rotYMat, transforms);
-  transforms = M4.multiply(rotZMat, transforms);
-  transforms = M4.multiply(traMat, transforms);
+  // Create the composite matrix with all transformations (world matrix)
+  let world = M4.identity();
+  world = M4.multiply(scaMat, world);
+  world = M4.multiply(rotXMat, world);
+  world = M4.multiply(rotYMat, world);
+  world = M4.multiply(rotZMat, world);
+  world = M4.multiply(traMat, world);
 
-  object.matrix = transforms;
+  object.matrix = world;
 
-  // Apply the projection to the final matrix for the
   // World-View-Projection
-  const wvpMat = M4.multiply(viewProjectionMatrix, transforms);
+  const worldViewProjection = M4.multiply(viewProjectionMatrix, world);
 
-  // Model uniforms
-  let objectUniforms = {
-    u_transforms: wvpMat
-  }
-  twgl.setUniforms(programInfo, objectUniforms);
+  // Matriz para transformar normales (aprox: inversa)
+  const worldInverse = M4.inverse(world);
+
+  // Color del objeto (si no tiene, blanco)
+  const color = object.color || [1.0, 1.0, 1.0, 1.0];
+
+  // Posición de la cámara (ya la tiene la escena)
+  const cameraPos = scene.camera.posArray;
+
+  // Luz en el mundo (elige la que quieras)
+  const lightPos = [20, 30, 20];
+
+  // Uniforms expected by the Phong shaders
+  const uniforms = {
+    // Scene
+    u_lightWorldPosition: lightPos,
+    u_viewWorldPosition: cameraPos,
+
+    // Model
+    u_world: world,
+    u_worldInverseTransform: worldInverse,
+    u_worldViewProjection: worldViewProjection,
+
+    // Lights
+    u_ambientLight:  [0.2, 0.2, 0.2, 1.0],
+    u_diffuseLight:  [1.0, 1.0, 1.0, 1.0],
+    u_specularLight: [1.0, 1.0, 1.0, 1.0],
+
+    // Model colors (using the color from the API)
+    u_ambientColor:  color,
+    u_diffuseColor:  color,
+    u_specularColor: [1.0, 1.0, 1.0, 1.0],
+
+    // Shininess
+    u_shininess: 20.0,
+  };
+
+  twgl.setUniforms(programInfo, uniforms);
 
   gl.bindVertexArray(object.vao);
   twgl.drawBufferInfo(gl, object.bufferInfo);
 }
-
 // Function to do the actual display of the objects
 async function drawScene() {
   // Compute time elapsed since last frame
