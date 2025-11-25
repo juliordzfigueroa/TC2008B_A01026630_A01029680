@@ -19,7 +19,7 @@ import { Camera3D } from './camera3d.js';
 
 import {
   agents, obstacles, initAgentsModel,
-  update, getAgents, getObstacles
+  update, getCars, getObstacles
 } from './api_connection.js';
 
 // Define the shader code, using GLSL 3.00
@@ -64,8 +64,9 @@ async function main() {
   await initAgentsModel();
 
   // Get the agents and obstacles
-  await getAgents();
+  await getCars();
   await getObstacles();
+  
 
 
   // Initialize the scene
