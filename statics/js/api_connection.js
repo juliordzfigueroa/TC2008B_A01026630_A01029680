@@ -14,14 +14,15 @@ import { Object3D } from './object3d';
 const agent_server_uri = "http://localhost:8585/";
 
 // Initialize arrays to store agents and obstacles
-const agents = [];
+const cars = [];
 const obstacles = [];
+const trafficLights = [];
+const destinations = [];
+const roads = [];
 
 // Define the data object
 const initData = {
-    NAgents: 500,
-    width: 50,
-    height: 50
+    NAgents: 5
 };
 
 
@@ -69,31 +70,31 @@ async function getCars() {
             //console.log("getAgents positions: ", result.positions)
 
             // Check if the agents array is empty
-            if (agents.length == 0) {
+            if (cars.length == 0) {
                 // Create new agents and add them to the agents array
-                for (const agent of result.positions) {
-                    const newAgent = new Object3D(agent.id, [agent.x, agent.y, agent.z]);
+                for (const car of result.positions) {
+                    const newAgent = new Object3D(car.id, [car.x, car.y, car.z]);
                     // Store the initial position
                     newAgent['oldPosArray'] = newAgent.posArray;
-                    agents.push(newAgent);
+                    cars.push(newAgent);
                 }
                 // Log the agents array
                 //console.log("Agents:", agents);
 
             } else {
                 // Update the positions of existing agents
-                for (const agent of result.positions) {
-                    const current_agent = agents.find((object3d) => object3d.id == agent.id);
+                for (const car of result.positions) {
+                    const current_car = cars.find((object3d) => object3d.id == car.id);
 
                     // Check if the agent exists in the agents array
-                    if(current_agent != undefined){
+                    if(current_car != undefined){
                         // Update the agent's position
-                        current_agent.oldPosArray = current_agent.posArray;
-                        current_agent.position = {x: agent.x, y: agent.y, z: agent.z};
+                        current_car.oldPosArray = current_car.posArray;
+                        current_car.position = {x: car.x, y: car.y, z: car.z};
                     }
 
-                    //console.log("OLD: ", current_agent.oldPosArray,
-                    //            " NEW: ", current_agent.posArray);
+                    //console.log("OLD: ", current_car.oldPosArray,
+                    //            " NEW: ", current_car.posArray);
                 }
             }
         }
@@ -141,7 +142,9 @@ async function getTrafficLights() {
 
             for (const light of result.positions) {
                 const newLight = new Object3D(light.id, [light.x, light.y, light.z]);
-                obstacles.push(newLight);
+                newLight['state'] = light.state; 
+                newLight.color = light.state === 'red' ? [1.0, 0.0, 0.0, 1.0] : [0.0, 1.0, 0.0, 1.0];
+                trafficLights.push(newLight);
             }
         }
     } catch (error) {
@@ -157,7 +160,8 @@ async function getDestinations() {
 
             for (const dest of result.positions) {
                 const newDest = new Object3D(dest.id, [dest.x, dest.y, dest.z]);
-                obstacles.push(newDest);
+                newDest.color = [0.0, 0.0, 1.0, 1.0]; // Azul para los destinos
+                destinations.push(newDest); 
             }
         }
     } catch (error) {   
@@ -173,7 +177,9 @@ async function getRoads() {
 
             for (const road of result.positions) {
                 const newRoad = new Object3D(road.id, [road.x, road.y, road.z]);
-                obstacles.push(newRoad);
+                newRoad.color = [0.2, 0.2, 0.2, 1.0]; // Gris oscuro para las carreteras
+                newRoad['direction'] = road.direction;
+                roads.push(newRoad);
             }
         }
     } catch (error) {
@@ -193,6 +199,7 @@ async function update() {
         if (response.ok) {
             // Retrieve the updated agent positions
             await getCars();
+            await getTrafficLights();
             // Log a message indicating that the agents have been updated
             //console.log("Updated agents");
         }
@@ -203,4 +210,4 @@ async function update() {
     }
 }
 
-export { agents, obstacles, initAgentsModel, update, getCars, getObstacles, getTrafficLights, getDestinations, getRoads };
+export { cars, obstacles, trafficLights, roads, destinations, initAgentsModel, update, getCars, getObstacles, getTrafficLights, getDestinations, getRoads };
