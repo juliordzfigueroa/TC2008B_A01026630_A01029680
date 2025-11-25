@@ -51,7 +51,7 @@ class Car(CellAgent):
             self.target = random.choice(self.model.destinations) \
                 if self.model.destinations else self.model.random_destination()
 
-            self.route = self.model.dijkstra(self.pos, self.target)
+            self.route = self.model.a_star(self.pos, self.target)
             self.route_index = 0
             return
 
@@ -66,7 +66,7 @@ class Car(CellAgent):
             if self.blocked_steps >= 5:
                 self.target = random.choice(self.model.destinations) \
                     if self.model.destinations else self.model.random_destination()
-                self.route = self.model.dijkstra(self.pos, self.target)
+                self.route = self.model.a_star(self.pos, self.target)
                 self.route_index = 0
                 self.blocked_steps = 0
             return

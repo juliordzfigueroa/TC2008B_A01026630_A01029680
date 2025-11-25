@@ -109,27 +109,32 @@ class CityModel(Model):
     def random_destination(self):
         return random.choice(list(self.graph.keys()))
 
-    # Función de Dijkstra para encontrar la ruta más corta
-    def dijkstra(self, start, goal):
+    # Función heurística para A*
+    def heuristic(self, a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+    # Función de A* para encontrar la ruta más corta
+    def a_star(self, start, goal):
         if start == goal:
             return [start]
 
-        frontier = [(0, start)]
-        cost = {start: 0}
+        frontier = []
+        heapq.heappush(frontier, (0, start))
         came_from = {start: None}
+        g_cost = {start: 0}
 
         while frontier:
-            curr_cost, current = heapq.heappop(frontier)
+            f_current, current = heapq.heappop(frontier)
 
             if current == goal:
                 break
 
             for nxt in self.graph.get(current, []):
-                new_cost = curr_cost + 1
-                if nxt not in cost or new_cost < cost[nxt]:
-                    cost[nxt] = new_cost
+                new_g = g_cost[current] + 1
+                if nxt not in g_cost or new_g < g_cost[nxt]:
+                    g_cost[nxt] = new_g
+                    f_cost = new_g + self.heuristic(nxt, goal)
+                    heapq.heappush(frontier, (f_cost, nxt))
                     came_from[nxt] = current
-                    heapq.heappush(frontier, (new_cost, nxt))
 
         if goal not in came_from:
             return []
