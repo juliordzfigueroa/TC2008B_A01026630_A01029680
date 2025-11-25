@@ -1,3 +1,9 @@
+""""
+Agentes del modelo de tráfico.
+Jin Sik Yoon A01026630 
+Julio César Rodríguez Figueroa A01029680
+"""
+
 from mesa.discrete_space import CellAgent, FixedAgent
 import random
 

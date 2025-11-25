@@ -1,3 +1,9 @@
+"""
+Modelo de simulación de tráfico utilizando Mesa.
+Jin Sik Yoon A01026630
+Julio César Rodríguez Figueroa A01029680
+"""
+
 from mesa import Model
 from mesa.discrete_space import OrthogonalMooreGrid
 from .agent import Car, Road, Traffic_Light, Obstacle, Destination
