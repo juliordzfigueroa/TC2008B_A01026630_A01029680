@@ -1,58 +1,53 @@
 # TC2008B. Sistemas Multiagentes y Gráficas Computacionales
-# Python flask server to interact with Unity. Based on the code provided by Sergio Ruiz.
-# Octavio Navarro. October 2023 
+# Jin Sik Yoon A01026630 
+# Julio César Rodríguez Figueroa A01029680
+# Servidor de Python flask para interactuar con JavaScript
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS, cross_origin
 from traffic_model.model import CityModel
 from traffic_model.agent import Road, Traffic_Light, Obstacle, Destination, Car
 
-# Size of the board:
-number_agents = 10
-width = 28
-height = 28
-randomModel = None
+# Parametros del modelo
+model = None
 currentStep = 0
 
 # This application will be used to interact with Unity
-app = Flask("Traffic example")
+app = Flask("Traffic Simulation")
 cors = CORS(app, origins=['http://localhost'])
 
 # This route will be used to send the parameters of the simulation to the server.
 # The servers expects a POST request with the parameters in a form.
-@app.route('/init', methods=['POST'])
+@app.route('/init', methods=['GET', 'POST'])
 @cross_origin()
 def initModel():
-    global currentStep, randomModel, number_agents, width, height
+    global currentStep, model
 
     if request.method == 'POST':
         try:
             data = request.get_json()
-            print("INIT JSON:", data)  # debug
-            number_agents = int(data.get('NAgents'))
-            width = int(data.get('width'))
-            height = int(data.get('height'))
+            number_agents = int(data.get('NAgents', 5))
             currentStep = 0
         except Exception as e:
             print("INIT ERROR:", e)
             return jsonify({"message": "Error initializing the model"}), 500
 
-    print(f"Model parameters:{number_agents, width, height}")
-    randomModel = CityModel(number_agents)
-    return jsonify({"message": f"Parameters recieved, model initiated.\nSize: {width}x{height}"})
+    print(f"Model parameters:{number_agents}")
+    model = CityModel(number_agents)
+    return jsonify({"message": f"Parameters recieved, model initiated"})
 
 # This route will be used to get the positions of the agents
 @app.route('/getCars', methods=['GET'])
 @cross_origin()
 def getCars():
-    global randomModel
+    global model
 
     if request.method == 'GET':
         # Get the positions of the agents and return them to WebGL in JSON.json.t.
         # Note that the positions are sent as a list of dictionaries, where each dictionary has the id and position of an agent.
         # The y coordinate is set to 1, since the agents are in a 3D world. The z coordinate corresponds to the row (y coordinate) of the grid in mesa.
         try:
-            agentCells = randomModel.grid.all_cells.select(
+            agentCells = model.grid.all_cells.select(
                 lambda cell: any(isinstance(obj, Car) for obj in cell.agents)
             ).cells
             # print(f"CELLS: {agentCells}")
@@ -80,14 +75,14 @@ def getCars():
 @app.route('/getObstacles', methods=['GET'])
 @cross_origin()
 def getObstacles():
-    global randomModel
+    global model
 
     if request.method == 'GET':
         try:
             # Get the positions of the obstacles and return them to WebGL in JSON.json.t.
             # Same as before, the positions are sent as a list of dictionaries, where each dictionary has the id and position of an obstacle.
 
-            obstacleCells = randomModel.grid.all_cells.select(
+            obstacleCells = model.grid.all_cells.select(
                 lambda cell: any(isinstance(obj, Obstacle) for obj in cell.agents)
             )
             # print(f"CELLS: {agentCells}")
@@ -114,14 +109,14 @@ def getObstacles():
 @app.route('/getTrafficLights', methods=['GET'])
 @cross_origin()
 def getTrafficLights():
-    global randomModel
+    global model
 
     if request.method == 'GET':
         try:
             # Get the positions of the traffic lights and return them to WebGL in JSON.json.t.
             # Same as before, the positions are sent as a list of dictionaries, where each dictionary has the id and position of a traffic light.
 
-            trafficLightCells = randomModel.grid.all_cells.select(
+            trafficLightCells = model.grid.all_cells.select(
                 lambda cell: any(isinstance(obj, Traffic_Light) for obj in cell.agents)
             )
 
@@ -146,14 +141,14 @@ def getTrafficLights():
 @app.route('/getDestinations', methods=['GET'])
 @cross_origin()
 def getDestinations():
-    global randomModel
+    global model
 
     if request.method == 'GET':
         try:
             # Get the positions of the destinations and return them to WebGL in JSON.json.t.
             # Same as before, the positions are sent as a list of dictionaries, where each dictionary has the id and position of a destination.
 
-            destinationCells = randomModel.grid.all_cells.select(
+            destinationCells = model.grid.all_cells.select(
                 lambda cell: any(isinstance(obj, Destination) for obj in cell.agents)
             )
 
@@ -178,14 +173,14 @@ def getDestinations():
 @app.route('/getRoads', methods=['GET'])
 @cross_origin()
 def getRoads():
-    global randomModel
+    global model
 
     if request.method == 'GET':
         try:
             # Get the positions of the roads and return them to WebGL in JSON.json.t.
             # Same as before, the positions are sent as a list of dictionaries, where each dictionary has the id and position of a road.
 
-            roadCells = randomModel.grid.all_cells.select(
+            roadCells = model.grid.all_cells.select(
                 lambda cell: any(isinstance(obj, Road) for obj in cell.agents)
             )
 
@@ -212,11 +207,11 @@ def getRoads():
 @app.route('/update', methods=['GET'])
 @cross_origin()
 def updateModel():
-    global currentStep, randomModel
+    global currentStep, model
     if request.method == 'GET':
         try:
         # Update the model and return a message to WebGL saying that the model was updated successfully
-            randomModel.step()
+            model.step()
             currentStep += 1
             return jsonify({'message': f'Model updated to step {currentStep}.', 'currentStep':currentStep})
         except Exception as e:
