@@ -4,6 +4,7 @@ precision highp float;
 in vec3 v_normal;
 in vec3 v_surfaceToLight;
 in vec3 v_surfaceToView;
+in vec4 v_color;
  
 // Scene uniforms
 uniform vec4 u_ambientLight;
@@ -14,34 +15,39 @@ uniform vec4 u_specularLight;
 uniform vec4 u_ambientColor;
 uniform vec4 u_diffuseColor;
 uniform vec4 u_specularColor;
+
 uniform float u_shininess;
+
+uniform float u_isBuilding;
 
 out vec4 outColor;
 
 void main() {
-    // v_normal must be normalized because the shader will interpolate
-    // it for each fragment
-    vec3 normal = normalize(v_normal);
-
-    // Normalize the other incoming vectors
-    vec3 surfToLigthDirection = normalize(v_surfaceToLight);
-    vec3 surfToViewDirection = normalize(v_surfaceToView);
+    // Normal vectors and normalized vectors
+    vec3 N = normalize(v_normal);
+    vec3 L = normalize(v_surfaceToLight);
+    vec3 V = normalize(v_surfaceToView);
+    vec3 H = normalize(L + V);
 
     // CALCULATIONS FOR THE AMBIENT, DIFFUSE and SPECULAR COMPONENTS
-    float diffuse = max(dot(normal, surfToLigthDirection), 0.0);
-    float specular = 0.0;
+    float lambert = max(dot(N, L), 0.0);
+    float spec = 0.0;
 
-    if (diffuse > 0.0){
-        vec3 r = 2.0 * diffuse * normal - surfToLigthDirection; 
-        specular = pow(max(dot(surfToViewDirection, r), 0.0), u_shininess);
+    if (lambert > 0.0){
+        spec = pow(max(dot(N, H), 0.0), u_shininess);
     }
 
+    // If the object is a building
+
+    vec4 baseColor = mix(u_diffuseColor, v_color, u_isBuilding); // Base color of a vertex
+
     // Compute the three parts of the Phong lighting model
-    vec4 ambientColor = u_ambientColor * u_ambientLight;
-    vec4 diffuseColor = u_diffuseLight * u_diffuseColor * diffuse;
+    vec4 ambient  = u_ambientLight  * baseColor;
+    vec4 diffuse  = u_diffuseLight  * baseColor * lambert;
+    vec4 specular = u_specularLight * u_specularColor * spec;
 
-    vec4 specularColor = u_specularColor * u_specularLight * specular;
+    vec4 color = ambient + diffuse + specular;
+    color.a = 1.0;
 
-    // Use the color of the texture on the object
-    outColor = ambientColor + diffuseColor + specularColor;
+    outColor = color;
 }

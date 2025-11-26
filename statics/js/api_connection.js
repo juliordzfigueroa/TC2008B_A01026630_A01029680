@@ -22,7 +22,7 @@ const roads = [];
 
 // Define the data object
 const initData = {
-    NAgents: 5
+    NAgents: 5,
 };
 
 
