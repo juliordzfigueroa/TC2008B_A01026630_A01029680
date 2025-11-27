@@ -1,189 +1,180 @@
-"""
-Modelo de simulación de tráfico utilizando Mesa.
-Jin Sik Yoon A01026630
-Julio César Rodríguez Figueroa A01029680
-"""
-
-from mesa import Model
-from mesa.discrete_space import OrthogonalMooreGrid
-from .agent import Car, Road, Traffic_Light, Obstacle, Destination
-
-
-import json, random, heapq
+from mesa import Model                                                  # Base class for models
+from mesa.discrete_space import OrthogonalMooreGrid                     # Grid with Moore neighborhood
+from .agent import Car, Traffic_Light, Obstacle, Destination, Road      # Import agents
+import json, random                                                     # For map loading and randomness
 
 class CityModel(Model):
-    def __init__(self, N, map_path="traffic_model/maps/2022_base.txt", seed=42):
+    """
+    Simulación de vehículos basada en un mapa de ciudad.
+    Adaptado específicamente al mapa proporcionado.
+    """
+
+    def __init__(self, N, seed=42):
         super().__init__(seed=seed)
 
-        # Cargar diccionario
-        dataDictionary = json.load(open("traffic_model/mapDictionary.json", encoding="utf-8"))
-        self.dictionary = dataDictionary
+        # Cargar diccionario mapa
+        dataDictionary = json.load(open("mapDictionary.json"))
 
+        self.map_chars = {}
+        self.num_agents = N
         self.traffic_lights = []
+        self.cars = []
         self.destinations = []
-        self.spawn_points = []
-        self.steps = 0
+        self.road_positions = []
 
-        # Leer mapa
-        with open(map_path, encoding="utf-8") as f:
-            lines = f.readlines()
+        # Cargamos el mapa base
+        with open("maps/2023_base.txt") as baseFile:
+            lines = baseFile.readlines()
             self.width = len(lines[0].strip())
             self.height = len(lines)
 
             self.grid = OrthogonalMooreGrid(
-                [self.width, self.height], capacity=100, torus=False
+                (self.width, self.height), capacity=100, torus=False
             )
 
-            # Crear agentes fijos
+            # Agregar agentes según caracteres
             for r, row in enumerate(lines):
-                row = row.strip()
-                for c, col in enumerate(row):
+                for c, col in enumerate(row.strip()):
+                    pos = (c, self.height - r - 1)
+                    cell = self.grid[pos]
+                    self.map_chars[pos] = col
 
-                    cell = self.grid[(c, self.height - r - 1)]
+                    agent = None
 
-                    # Road
-                    if col in ["v", "^", ">", "<"]:
-                        road = Road(self, cell, self.dictionary[col])
+                    # --- Calles (flechas) ---
+                    if col in ["v", "^", "<", ">"]:
+                        direction = dataDictionary[col]  # Up/Down/Left/Right
+                        agent = Road(self, cell, direction)
+                        self.road_positions.append(pos)
 
-                    # Traffic Light
-                    elif col in ["S", "s"]:
-                        tl = Traffic_Light(
-                            self, cell,
-                            state=True if col == "s" else False,
-                            timeToChange=int(self.dictionary[col])
-                        )
-                        self.traffic_lights.append(tl)
+                    # --- Semáforos ---
+                    elif col in ["s", "S"]:
+                        is_green = True if col == "s" else False
+                        timeToChange = int(dataDictionary[col])
+                        agent = Traffic_Light(self, cell, is_green, timeToChange)
+                        self.traffic_lights.append(agent)
+                        self.road_positions.append(pos)
 
-                    # Obstacle
-                    elif col == "#":
-                        Obstacle(self, cell)
-
-                    # Destination
+                    # --- Destinos ---
                     elif col == "D":
-                        dest = Destination(self, cell)
-                        self.destinations.append((c, self.height - r - 1))
+                        agent = Destination(self, cell)
+                        self.destinations.append(agent)
+                        self.road_positions.append(pos)
 
-        # Spawn points = roads en los bordes
-        for x in range(self.width):
-            for y in range(self.height):
-                cell = self.grid[(x, y)]
-                if any(isinstance(a, Road) for a in cell.agents):
-                    if x in [0, self.width-1] or y in [0, self.height-1]:
-                        self.spawn_points.append((x, y))
+                    # --- Obstáculos ---
+                    elif col == "#":
+                        agent = Obstacle(self, cell)
 
-        # Crear grafo de carreteras
-        self.build_graph()
+                    # Espacios u otros caracteres se ignoran
+                    if agent is not None:
+                        # NO llamar a grid.place_agent: FixedAgent/CellAgent
+                        # ya se registran con `self.cell = cell` en __init__
+                        pass
 
-        # Crear coches iniciales
-        for _ in range(N):
-            self.add_car_from_spawn()
+        # Spawnpoint de autos (esquinas del mapa)
+        self.start_positions = [
+            (0, 0),
+            (0, self.height - 1),
+            (self.width - 1, 0),
+            (self.width - 1, self.height - 1),
+        ]
 
+        # Construir grafo de calles para A*
+        self.known_graph = self.build_graph()
+
+        self.steps = 0
         self.running = True
 
-    # Buildear el grafo de carreteras
+    # Construir grafo de calles para A*
     def build_graph(self):
-        self.graph = {}
-        directions = {
-            "Up": (0, 1),
-            "Down": (0, -1),
-            "Right": (1, 0),
-            "Left": (-1, 0)
-        }
+        """
+        Grafo dirigido de calles:
+        - Si hay Road (flecha): solo conecta en la dirección de la flecha.
+        - Si hay semáforo (S/s) o destino (D): conecta con todas las calles vecinas (intersección).
+        """
+        graph = {pos: [] for pos in self.road_positions}
 
-        for x in range(self.width):
-            for y in range(self.height):
-                cell = self.grid[(x, y)]
-                road = None
-                for a in cell.agents:
-                    if isinstance(a, Road):
-                        road = a
-                        break
+        for (x, y) in self.road_positions:
+            agents = self.grid[(x, y)].agents
 
-                if road is None:
+            road = next((a for a in agents if isinstance(a, Road)), None)
+            sem  = next((a for a in agents if isinstance(a, Traffic_Light)), None)
+            dest = next((a for a in agents if isinstance(a, Destination)), None)
+
+            # 1) Celda con flecha → solo se puede avanzar en esa dirección
+            if road is not None:
+                d = road.direction
+                if d == "Up":
+                    nxt = (x, y + 1)
+                elif d == "Down":
+                    nxt = (x, y - 1)
+                elif d == "Left":
+                    nxt = (x - 1, y)
+                elif d == "Right":
+                    nxt = (x + 1, y)
+                else:
                     continue
 
-                dx, dy = directions[road.direction]
-                nx, ny = x + dx, y + dy
+                if nxt in graph:
+                    graph[(x, y)].append(nxt)
 
-                neighs = []
-                dx, dy = directions[road.direction]
-                nx, ny = x + dx, y + dy
+            # 2) Semáforos o destinos → intersecciones (conectan a todas las calles vecinas)
+            elif sem is not None or dest is not None:
+                for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                    nxt = (x + dx, y + dy)
+                    if nxt in graph:
+                        graph[(x, y)].append(nxt)
 
-                neighs = []
-                if 0 <= nx < self.width and 0 <= ny < self.height:
-                    next_cell = self.grid[(nx, ny)]
-                    if any(isinstance(a, Road) for a in next_cell.agents):
-                        neighs.append((nx, ny))
+            # 3) Obstáculos no aparecen en road_positions, así que no se consideran aquí
 
-                self.graph[(x, y)] = neighs
+        return graph
 
+    # Obtener el caracter del mapa en una posición
+    def get_map_sign(self, pos):
+        """
+        Regresa el caracter original del mapa en la posición dada.
+        pos puede ser una tupla (x, y) o algo tipo coordinate.
+        """
+        return self.map_chars.get(tuple(pos), None)
+    
+    # Elegir un destino aleatorio para un auto
+    def get_random_destination(self):
+        if len(self.destinations) == 0:
+            return None
+        return random.choice(self.destinations)
 
-    def random_destination(self):
-        return random.choice(list(self.graph.keys()))
+    # Spawnear autos en los puntos de inicio (cada 10 pasos)
+    def spawn_cars(self):
+        for pos in self.start_positions:
+            cell = self.grid[pos]
 
-    # Función heurística para A*
-    def heuristic(self, a, b):
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
-    # Función de A* para encontrar la ruta más corta
-    def a_star(self, start, goal):
-        if start == goal:
-            return [start]
+            # Solo spawnear si ahí hay una calle (Road)
+            if not any(isinstance(a, Road) for a in cell.agents):
+                continue
 
-        frontier = []
-        heapq.heappush(frontier, (0, start))
-        came_from = {start: None}
-        g_cost = {start: 0}
-
-        while frontier:
-            f_current, current = heapq.heappop(frontier)
-
-            if current == goal:
-                break
-
-            for nxt in self.graph.get(current, []):
-                new_g = g_cost[current] + 1
-                if nxt not in g_cost or new_g < g_cost[nxt]:
-                    g_cost[nxt] = new_g
-                    f_cost = new_g + self.heuristic(nxt, goal)
-                    heapq.heappush(frontier, (f_cost, nxt))
-                    came_from[nxt] = current
-
-        if goal not in came_from:
-            return []
-
-        # Reconstruir la ruta
-        path = []
-        node = goal
-        while node != start:
-            path.append(node)
-            node = came_from[node]
-        path.append(start)
-        path.reverse()
-        return path
-
-    # Agregar un coche desde un punto de spawn
-    def add_car_from_spawn(self):
-        random.shuffle(self.spawn_points)
-
-        for (x, y) in self.spawn_points:
-            cell = self.grid[(x, y)]
+            # Si ya hay un carro, no spawnear otro
             if any(isinstance(a, Car) for a in cell.agents):
                 continue
 
-            car = Car(self, cell)
-            return True
+            # Crear el carro: asignar cell lo coloca en la celda
+            new_car = Car(self, cell)
+            self.cars.append(new_car)
 
-        return False
-
-    # Remover un coche del modelo
-    def remove_car(self, car):
-        self.grid.remove_agent(car)
-
-    # Función de paso del modelo
+    # Paso del modelo
     def step(self):
+        # Llevamos nuestro propio contador
         self.steps += 1
+
+        # Spawnear autos cada 4 ticks
+        if self.steps % 20 == 0:
+            self.spawn_cars()
+
+        # Avanzar todos los agentes
         self.agents.shuffle_do("step")
-        # agregar coches periódicamente
-        if self.steps % 10 == 0:
-            if not self.add_car_from_spawn():
-                self.running = False
+
+        # Limpiar la lista de coches (quitar los que ya se eliminaron)
+        self.cars = [c for c in self.cars if c in self.agents]
+
+        # Condición de parada simple
+        if len(self.cars) == 0 and self.steps > 50:
+            self.running = False
