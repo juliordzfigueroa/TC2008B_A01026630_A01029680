@@ -33,7 +33,7 @@ const scene = new Scene3D();
 // Desired building height in "cells" (adjust as needed)
 const BUILDING_HEIGHT_CELLS = 6;  // for example, 6 cells high
 
-// Dictionary for the different building models, each one has different dimensions we will use for scaling in our model
+// List for the different building models, each one has different dimensions we will use for scaling in our model
 const BUILDING_MODELS = [
   {
     id: 'b1',
@@ -69,11 +69,26 @@ const BUILDING_MODELS = [
   },
 ];
 
+// For free obstacles decorations
+const DECORATION_SCALE = 0.5; // Global scale factor for decorations
+
+const DECORATION_MODELS = [
+  {
+    id: 'dog',
+    path: './models/13463_Australian_Cattle_Dog_v3.obj',
+    mtl: './models/13463_Australian_Cattle_Dog_v3.mtl',
+    width: 2.0,
+    depth: 1.0,
+    height: 1.5,
+  },
+];
+
 const BUILDING_GLOBAL_SCALE = 1.0; // Global scale factor for buildings
 
 const maxBuildings = 75; // Maximum number of buildings to place
 
 let buildingMeshes = {};
+let decorationMeshes = {};
 
 /*
 // Variable for the scene settings
@@ -111,7 +126,7 @@ async function main() {
   // Prepares the buildings models
   buildingMeshes = {};
   for (const model of BUILDING_MODELS) {
-    // Cargar MTL y registrar materiales (Kd, Ns, etc.)
+    // Load MTL and register materials (Kd, Ns, etc.)
     const [mtlRes, objRes] = await Promise.all([
       fetch(model.mtl),
       fetch(model.path),
@@ -122,6 +137,22 @@ async function main() {
 
     const objText = await objRes.text();
     buildingMeshes[model.id] = objText;
+  }
+
+  // Load decoration models if needed in future
+
+  decorationMeshes = {};
+  for (const model of DECORATION_MODELS) {
+    const [mtlRes, objRes] = await Promise.all([
+      fetch(model.mtl),
+      fetch(model.path),
+    ]);
+
+    const mtlText = await mtlRes.text();
+    loadMtl(mtlText);
+
+    const objText = await objRes.text();
+    decorationMeshes[model.id] = objText;
   }
 
   // Initialize the agents model
@@ -208,7 +239,9 @@ function setupObjects(scene, gl, programInfo) {
     light.arrays = baseCube.arrays;
     light.bufferInfo = baseCube.bufferInfo;
     light.vao = baseCube.vao;
-    light.scale = { x: 0.5, y: 0.5, z: 0.5 };
+    light.scale = { x: 0.4, y: 0.8, z: 0.4 }; 
+    light.isTrafficLight = true; // Flag to identify traffic lights
+    
     scene.addObject(light);
   }
 
@@ -244,7 +277,7 @@ function setupObjects(scene, gl, programInfo) {
   }
 
   // We use the obstacles and destinations to place buildings models
-const buildingCells = [...obstacles, ...destinations];
+  const buildingCells = [...obstacles, ...destinations];
 
   // Shuffle the buildingCells array to randomize building placement
 
@@ -254,6 +287,7 @@ const buildingCells = [...obstacles, ...destinations];
   }
 
   let buildingCount = 0;
+  const cellsWithBuilding = new Set();
 
   for (const cell of buildingCells) {
     // Limit the amount of buildings placed
@@ -293,6 +327,9 @@ const buildingCells = [...obstacles, ...destinations];
     building.color = [1.0, 1.0, 1.0, 1.0];
     scene.addObject(building);
     buildingCount++;
+
+    // Mark this cell as having a building
+    cellsWithBuilding.add(cell);
   }
 
   // For the rest of the buildings places that are free, and are obstacles, change their color to greenish
@@ -300,8 +337,10 @@ const buildingCells = [...obstacles, ...destinations];
     if (!scene.objects.includes(obstacle)) continue; // Skip if not in scene
     obstacle.color = [0.2, 0.6, 0.2, 1.0]; // Greenish color
   }
+
   
 
+  // Log the total number of objects and buildings
   console.log('Total objects in scene:', scene.objects.length, 'buildings:', buildingCount);
 }
 
@@ -337,6 +376,9 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   // Determine if the object is a building
   const isBuilding = object.isBuilding === true;
   const isGround = object.material === 'ground';
+  const isTrafficLight = object.isTrafficLight === true;
+
+  const trafficColor = [1.0, 0.1, 0.1, 1.0]; // Default to red
 
   // Object color
   const color = object.color || [1.0, 1.0, 1.0, 1.0];
@@ -389,6 +431,10 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
 
     // Shininess
     u_shininess: shininess,
+
+    // Traffic light specific
+    u_isTrafficLight: isTrafficLight ? 1 : 0,
+    u_trafficColor: trafficColor,
   };
 
   twgl.setUniforms(programInfo, uniforms);

@@ -13,7 +13,7 @@ class CityModel(Model):
         super().__init__(seed=seed)
 
         # Cargar diccionario mapa
-        dataDictionary = json.load(open("mapDictionary.json"))
+        dataDictionary = json.load(open("traffic_model/mapDictionary.json"))
 
         self.map_chars = {}
         self.num_agents = N
@@ -23,7 +23,7 @@ class CityModel(Model):
         self.road_positions = []
 
         # Cargamos el mapa base
-        with open("maps/2023_base.txt") as baseFile:
+        with open("traffic_model/maps/2023_base.txt") as baseFile:
             lines = baseFile.readlines()
             self.width = len(lines[0].strip())
             self.height = len(lines)

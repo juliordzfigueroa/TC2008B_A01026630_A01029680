@@ -19,6 +19,9 @@ uniform vec4 u_specularColor;
 uniform float u_shininess;
 
 uniform float u_isBuilding;
+uniform float u_isTrafficLight;
+
+uniform vec4 u_trafficColor;
 
 out vec4 outColor;
 
@@ -29,6 +32,11 @@ void main() {
     vec3 V = normalize(v_surfaceToView);
     vec3 H = normalize(L + V);
 
+    // If the object is a building
+
+    vec4 baseDiffuseColor = mix(u_diffuseColor, v_color, u_isBuilding); // Diffuse color for the buildings
+    vec4 baseAmbientColor = mix(u_ambientColor, v_color, u_isBuilding); // Ambient color for teh buildings
+
     // CALCULATIONS FOR THE AMBIENT, DIFFUSE and SPECULAR COMPONENTS
     float lambert = max(dot(N, L), 0.0);
     float spec = 0.0;
@@ -37,17 +45,18 @@ void main() {
         spec = pow(max(dot(N, H), 0.0), u_shininess);
     }
 
-    // If the object is a building
-
-    vec4 baseColor = mix(u_diffuseColor, v_color, u_isBuilding); // Base color of a vertex
-
     // Compute the three parts of the Phong lighting model
-    vec4 ambient  = u_ambientLight  * baseColor;
-    vec4 diffuse  = u_diffuseLight  * baseColor * lambert;
+    vec4 ambient  = u_ambientLight  * baseDiffuseColor;
+    vec4 diffuse  = u_diffuseLight  * baseAmbientColor * lambert;
     vec4 specular = u_specularLight * u_specularColor * spec;
 
-    vec4 color = ambient + diffuse + specular;
-    color.a = 1.0;
+    vec4 litcolor = ambient + diffuse + specular;
+    // For the color that the traffic light emits 
+    vec4 emissive = u_trafficColor * u_isTrafficLight;
+    
+    vec4 finalColor = litcolor + emissive;
 
-    outColor = color;
+    finalColor.a = baseDiffuseColor.a;
+
+    outColor = finalColor;
 }

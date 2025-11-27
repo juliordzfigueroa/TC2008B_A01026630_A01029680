@@ -140,17 +140,36 @@ async function getTrafficLights() {
         if (response.ok) {
             let result = await response.json();
 
-            for (const light of result.positions) {
-                const newLight = new Object3D(light.id, [light.x, light.y, light.z]);
-                newLight['state'] = light.state; 
-                newLight.color = light.state === 'red' ? [1.0, 0.0, 0.0, 1.0] : [0.0, 1.0, 0.0, 1.0];
-                trafficLights.push(newLight);
+            if (trafficLights.length === 0) {
+                // Create new traffic lights
+                for (const light of result.positions) {
+                    const newLight = new Object3D(light.id, [light.x, light.y, light.z]);
+                    newLight.state = light.state;
+                    newLight.color = light.state === 'red'
+                        ? [1.0, 0.0, 0.0, 1.0]
+                        : [0.0, 1.0, 0.0, 1.0];
+                    trafficLights.push(newLight);
+                }
+            } else {
+                // Update existing traffic lights states and positions
+                for (const light of result.positions) {
+                    const current = trafficLights.find(o => o.id === light.id);
+                    if (!current) continue;
+
+                    current.oldPosArray = current.posArray;
+                    current.position = { x: light.x, y: light.y, z: light.z }; // usa el setter de Object3D
+                    current.state = light.state;
+                    current.color = light.state === 'red'
+                        ? [1.0, 0.0, 0.0, 1.0]
+                        : [0.0, 1.0, 0.0, 1.0];
+                }
             }
         }
     } catch (error) {
         console.log(error);
     }
 }
+
 
 async function getDestinations() {
     try {
@@ -201,7 +220,7 @@ async function update() {
             await getCars();
             await getTrafficLights();
             // Log a message indicating that the agents have been updated
-            //console.log("Updated agents");
+            // console.log("Updated agents");
         }
 
     } catch (error) {

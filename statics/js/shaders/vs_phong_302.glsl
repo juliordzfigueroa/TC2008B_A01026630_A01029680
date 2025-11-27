@@ -1,10 +1,10 @@
 #version 300 es
-in vec4 a_position; // input | atributos unicos a cada vertice
+in vec4 a_position; // input | unique atributes for each vertex
 in vec3 a_normal;
 in vec4 a_color; 
 
 // Scene uniforms
-uniform vec3 u_lightWorldPosition; // atributos para todos los vertices
+uniform vec3 u_lightWorldPosition; // atributes for all vertexes
 uniform vec3 u_viewWorldPosition;
 
 // Model uniforms
