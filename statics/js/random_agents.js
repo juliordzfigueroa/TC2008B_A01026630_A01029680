@@ -85,10 +85,11 @@ const DECORATION_MODELS = [
 
 const BUILDING_GLOBAL_SCALE = 1.0; // Global scale factor for buildings
 
-const maxBuildings = 75; // Maximum number of buildings to place
+const maxBuildings = 90; // Maximum number of buildings to place
 
 let buildingMeshes = {};
 let decorationMeshes = {};
+let carTemplate = null;
 
 /*
 // Variable for the scene settings
@@ -109,8 +110,6 @@ let gl = undefined;
 const duration = 1000; // ms
 let elapsed = 0;
 let then = 0;
-let buildingStr = null;
-
 
 // Main function is async to be able to make the requests
 async function main() {
@@ -199,6 +198,8 @@ function setupObjects(scene, gl, programInfo) {
   const baseCube = new Object3D(-1);
   baseCube.prepareVAO(gl, programInfo);
 
+  carTemplate = baseCube
+
   const buildingTemplates = {};
   for (const modelInfo of BUILDING_MODELS) {
     const objText = buildingMeshes[modelInfo.id];
@@ -256,14 +257,9 @@ function setupObjects(scene, gl, programInfo) {
     scene.addObject(dest);
   }
   
-  // Cars
-  for (const car of cars) {
-    car.arrays = baseCube.arrays;
-    car.bufferInfo = baseCube.bufferInfo;
-    car.vao = baseCube.vao;
-    car.scale = { x: 0.5, y: 0.5, z: 0.5 };
-    scene.addObject(car);
-  }
+  // Cars will be loaded next in the scene
+
+  console.log('Total cars added:', cars.length);
 
   // Obstacles
   for (const obstacle of obstacles) {
@@ -342,8 +338,24 @@ function setupObjects(scene, gl, programInfo) {
 
   // Log the total number of objects and buildings
   console.log('Total objects in scene:', scene.objects.length, 'buildings:', buildingCount);
+  // Finally, synchronize car objects
+  syncCarObjects();
 }
 
+function syncCarObjects() {
+  if (carTemplate === null) return; // Ensure the car template is available
+
+  for (const car of cars) {
+
+    car.arrays = carTemplate.arrays;
+    car.bufferInfo = carTemplate.bufferInfo;
+    car.vao = carTemplate.vao;
+    car.scale = { x: 0.4, y: 0.4, z: 0.8 };
+    car.color = [0.0, 0.0, 1.0, 1.0]; // Blue color for cars
+    car.isCar = true; // Flag to identify cars
+    scene.addObject(car);
+  }
+}
 // Draw an object with its corresponding transformations
 function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   // Prepare the vector for translation and scale
@@ -473,6 +485,7 @@ async function drawScene() {
   if (elapsed >= duration) {
     elapsed = 0;
     await update();
+    syncCarObjects();
   }
 
   requestAnimationFrame(drawScene);

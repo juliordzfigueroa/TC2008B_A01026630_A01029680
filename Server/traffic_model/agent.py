@@ -152,7 +152,7 @@ class Traffic_Light(FixedAgent):
     def __init__(self, model, cell, state = False, timeToChange = 10):
         super().__init__(model)
         self.cell = cell
-        self.state = state
+        self.state = state # True = Green, False = Red
         self.timeToChange = timeToChange
     
     def step(self):
