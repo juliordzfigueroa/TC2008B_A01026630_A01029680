@@ -58,49 +58,33 @@ async function initAgentsModel() {
  */
 async function getCars() {
     try {
-        // Send a GET request to the agent server to retrieve the agent positions
         let response = await fetch(agent_server_uri + "getCars");
 
-        // Check if the response was successful
         if (response.ok) {
-            // Parse the response as JSON
             let result = await response.json();
+            const positions = result.positions || [];
 
-            // Log the agent positions
-            //console.log("getAgents positions: ", result.positions)
+            for (const car of positions) {
+                // ¿Ya existe este coche?
+                let obj = cars.find(object3d => object3d.id === car.id);
 
-            // Check if the agents array is empty
-            if (cars.length == 0) {
-                // Create new agents and add them to the agents array
-                for (const car of result.positions) {
-                    const newAgent = new Object3D(car.id, [car.x, car.y, car.z]);
-                    // Store the initial position
-                    newAgent['oldPosArray'] = newAgent.posArray;
-                    cars.push(newAgent);
-                }
-                // Log the agents array
-                //console.log("Agents:", agents);
+                if (!obj) {
+                    // --- PRIMERA VEZ: crearlo ---
+                    obj = new Object3D(car.id, [car.x, car.y + 1, car.z]);
 
-            } else {
-                // Update the positions of existing agents
-                for (const car of result.positions) {
-                    const current_car = cars.find((object3d) => object3d.id == car.id);
+                    // oldPosArray = posición inicial (para futura interpolación)
+                    obj.oldPosArray = [...obj.posArray];
 
-                    // Check if the agent exists in the agents array
-                    if(current_car != undefined){
-                        // Update the agent's position
-                        current_car.oldPosArray = current_car.posArray;
-                        current_car.position = {x: car.x, y: car.y, z: car.z};
-                    }
-
-                    //console.log("OLD: ", current_car.oldPosArray,
-                    //            " NEW: ", current_car.posArray);
+                    cars.push(obj);
+                    console.log("Nuevo coche creado:", car.id, obj.posArray);
+                } else {
+                    // --- SIGUIENTES VECES: actualizar ---
+                    obj.oldPosArray = [...obj.posArray];          // solo lectura del getter
+                    obj.setPosition([car.x, car.y + 1, car.z]);       // AQUÍ actualizas la posición
                 }
             }
         }
-
     } catch (error) {
-        // Log any errors that occur during the request
         console.log(error);
     }
 }
@@ -134,40 +118,46 @@ async function getObstacles() {
 }
 
 async function getTrafficLights() {
-    try {
-        let response = await fetch(agent_server_uri + "getTrafficLights");
+  try {
+    let response = await fetch(agent_server_uri + "getTrafficLights");
 
-        if (response.ok) {
-            let result = await response.json();
+    if (response.ok) {
+      let result = await response.json();
 
-            if (trafficLights.length === 0) {
-                // Create new traffic lights
-                for (const light of result.positions) {
-                    const newLight = new Object3D(light.id, [light.x, light.y, light.z]);
-                    newLight.state = light.state;
-                    newLight.color = light.state === 'red'
-                        ? [1.0, 0.0, 0.0, 1.0]
-                        : [0.0, 1.0, 0.0, 1.0];
-                    trafficLights.push(newLight);
-                }
-            } else {
-                // Update existing traffic lights states and positions
-                for (const light of result.positions) {
-                    const current = trafficLights.find(o => o.id === light.id);
-                    if (!current) continue;
+      if (trafficLights.length === 0) {
+        // Create new objects
+        for (const light of result.positions) {
+          const obj = new Object3D(light.id, [light.x, light.y, light.z]);
+          obj.state = light.state;
 
-                    current.oldPosArray = current.posArray;
-                    current.position = { x: light.x, y: light.y, z: light.z }; // usa el setter de Object3D
-                    current.state = light.state;
-                    current.color = light.state === 'red'
-                        ? [1.0, 0.0, 0.0, 1.0]
-                        : [0.0, 1.0, 0.0, 1.0];
-                }
-            }
+          if (light.state === false) {
+            obj.color = [1.0, 0.0, 0.0, 1.0];   // rojo
+          } else if (light.state === true) {
+            obj.color = [0.0, 1.0, 0.0, 1.0];   // verde
+          }
+
+          trafficLights.push(obj);
         }
-    } catch (error) {
-        console.log(error);
+      } else {
+        // To update existing objects
+        for (const light of result.positions) {
+          const obj = trafficLights.find(object3d => object3d.id === light.id);
+          if (!obj) continue;
+
+          obj.setPosition([light.x, light.y, light.z]); 
+          obj.state = light.state;
+
+          if (light.state === false) {
+            obj.color = [1.0, 0.0, 0.0, 1.0];
+          } else if (light.state === true) {
+            obj.color = [0.0, 1.0, 0.0, 1.0];
+          }
+        }
+      }
     }
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 
@@ -219,6 +209,8 @@ async function update() {
             // Retrieve the updated agent positions
             await getCars();
             await getTrafficLights();
+            await getDestinations();
+            await getRoads();
             // Log a message indicating that the agents have been updated
             // console.log("Updated agents");
         }

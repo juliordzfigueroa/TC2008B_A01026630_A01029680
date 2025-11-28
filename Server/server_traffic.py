@@ -23,18 +23,22 @@ cors = CORS(app, origins=['http://localhost'])
 def initModel():
     global currentStep, model
 
+    # Siempre tener un valor por defecto
+    number_agents = 5  
+
     if request.method == 'POST':
         try:
             data = request.get_json()
+            # Si viene en el body, lo sobreescribes
             number_agents = int(data.get('NAgents', 5))
             currentStep = 0
         except Exception as e:
             print("INIT ERROR:", e)
             return jsonify({"message": "Error initializing the model"}), 500
 
-    print(f"Model parameters:{number_agents}")
+    print(f"Model parameters: {number_agents}")
     model = CityModel(number_agents)
-    return jsonify({"message": f"Parameters recieved, model initiated"})
+    return jsonify({"message": "Parameters received, model initiated"})
 
 # This route will be used to get the positions of the agents
 @app.route('/getCars', methods=['GET'])
