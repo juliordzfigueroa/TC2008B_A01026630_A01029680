@@ -62,25 +62,36 @@ async function getCars() {
 
         if (response.ok) {
             let result = await response.json();
-            const positions = result.positions || [];
+            const positions = result.positions;
+
+            const aliveCars = new Set(positions.map(car => car.id));
+
+            // Remove cars that are no longer present
+            for (let i = cars.length - 1; i >= 0; i--) {
+                const c = cars[i];
+                if (!aliveCars.has(c.id)) {
+                    cars.splice(i, 1);
+                }
+            }
 
             for (const car of positions) {
-                // ¿Ya existe este coche?
+                // Create an or update Object3D for each car
                 let obj = cars.find(object3d => object3d.id === car.id);
 
+                const newPos = [car.x, car.y + 1, car.z]; 
+
                 if (!obj) {
-                    // --- PRIMERA VEZ: crearlo ---
+                    // First create the new car
                     obj = new Object3D(car.id, [car.x, car.y + 1, car.z]);
 
-                    // oldPosArray = posición inicial (para futura interpolación)
+                    // Initial position 
                     obj.oldPosArray = [...obj.posArray];
 
                     cars.push(obj);
-                    console.log("Nuevo coche creado:", car.id, obj.posArray);
                 } else {
-                    // --- SIGUIENTES VECES: actualizar ---
-                    obj.oldPosArray = [...obj.posArray];          // solo lectura del getter
-                    obj.setPosition([car.x, car.y + 1, car.z]);       // AQUÍ actualizas la posición
+                    obj.oldPosArray = [...obj.posArray];
+
+                    obj.setPosition(newPos);
                 }
             }
         }
@@ -207,6 +218,10 @@ async function update() {
         // Check if the response was successful
         if (response.ok) {
             // Retrieve the updated agent positions
+            const data = await response.json();
+
+            // Debug the current step
+            console.log("[WebGL] Current Step: ", data.currentStep);
             await getCars();
             await getTrafficLights();
             await getDestinations();
