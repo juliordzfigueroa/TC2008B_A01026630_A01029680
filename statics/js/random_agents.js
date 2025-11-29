@@ -4,9 +4,8 @@
  * Jin Sik Yoon A01026630
  * Julio César Rodríguez Figueroa A01029680
  * 
- * 26/11/2025
+ * 28/11/2025
  */
-
 
 'use strict';
 
@@ -30,7 +29,7 @@ import fsGLSL from './shaders/fs_phong_302.glsl?raw';
 
 const scene = new Scene3D();
 
-// Desired building height in "cells" (adjust as needed)
+// Desired building height in "cells"
 const BUILDING_HEIGHT_CELLS = 6;  // for example, 6 cells high
 
 // List for the different building models, each one has different dimensions we will use for scaling in our model
@@ -83,12 +82,24 @@ const DECORATION_MODELS = [
   },
 ];
 
+const CAR_MODEL = {
+  id: 'car',
+  path: './models/lowpoly_car.obj',
+  mtl:  './models/lowpoly_car.mtl',
+  width:  2.7,   
+  depth:  4.8,  
+  height: 1.6,
+};
+
 const BUILDING_GLOBAL_SCALE = 1.0; // Global scale factor for buildings
+
+const CAR_GLOBAL_SCALE = 0.7; // Global scale factor for cars
 
 const maxBuildings = 90; // Maximum number of buildings to place
 
 let buildingMeshes = {};
 let decorationMeshes = {};
+let carMesh = null;
 let carTemplate = null;
 
 /*
@@ -103,11 +114,10 @@ const settings = {
 };
 */
 
-
 // Global variables
 let colorProgramInfo = undefined;
 let gl = undefined;
-const duration = 1000; // ms
+const duration = 1250; // ms
 let elapsed = 0;
 let then = 0;
 
@@ -138,8 +148,8 @@ async function main() {
     buildingMeshes[model.id] = objText;
   }
 
-  // Load decoration models if needed in future
-
+  // Load decoration models if implemented in the future
+  /*
   decorationMeshes = {};
   for (const model of DECORATION_MODELS) {
     const [mtlRes, objRes] = await Promise.all([
@@ -153,6 +163,19 @@ async function main() {
     const objText = await objRes.text();
     decorationMeshes[model.id] = objText;
   }
+    */
+
+  // Load car model
+  const [carMtlRes, carObjRes] = await Promise.all([
+    fetch(CAR_MODEL.mtl),
+    fetch(CAR_MODEL.path),
+  ]);
+
+  const carMtlText = await carMtlRes.text();
+  loadMtl(carMtlText);
+
+  const carObjText = await carObjRes.text();
+  carMesh = carObjText;
 
   // Initialize the agents model
   await initAgentsModel();
@@ -198,7 +221,15 @@ function setupObjects(scene, gl, programInfo) {
   const baseCube = new Object3D(-1);
   baseCube.prepareVAO(gl, programInfo);
 
-  carTemplate = baseCube
+  // Prepare car templatef
+  if (carMesh) {
+    carTemplate = new Object3D(-1);
+    carTemplate.prepareVAO(gl, programInfo, carMesh);
+  } else {
+    carTemplate = baseCube;
+  }
+
+  // Prepare building templates
 
   const buildingTemplates = {};
   for (const modelInfo of BUILDING_MODELS) {
@@ -256,10 +287,6 @@ function setupObjects(scene, gl, programInfo) {
     dest.material = 'ground';
     scene.addObject(dest);
   }
-  
-  // Cars will be loaded next in the scene
-
-  console.log('Total cars added:', cars.length);
 
   // Obstacles
   for (const obstacle of obstacles) {
@@ -342,24 +369,96 @@ function setupObjects(scene, gl, programInfo) {
   syncCarObjects();
 }
 
+// Gives direction in radians given a direction string or number for the model to face in the simulation
+function directionToAngleY(dir) {
+  if (typeof dir === 'string') {
+    switch (dir) {
+      case 'Down':  // Moves towards +Z
+        return 0.0;
+      case 'Up':    // Moves towards -Z
+        return Math.PI;
+      case 'Right': // Moves towards +X
+        return Math.PI * 0.5;
+      case 'Left':  // Moves towards -X
+        return -Math.PI * 0.5;
+      default:
+        return 0.0;
+    }
+  }
+  return 0.0;
+}
+
+// Function to synchronize car objects in the scene with the cars array in the API connection
 function syncCarObjects() {
   if (carTemplate === null) return; // Ensure the car template is available
 
-  for (const car of cars) {
+  const aliveCars = new Set(cars.map(car => car.id));
 
-    car.arrays = carTemplate.arrays;
+  // Remove cars that are no longer present
+
+  scene.objects = scene.objects.filter(obj => {
+    if (!obj.isCar) return true; // if an object is not a car, keep it 
+    return aliveCars.has(obj.id); // keep only cars that haven't get to their destination
+  });
+
+  for (const car of cars) {
+    // Create or update Object3D for each car
+    car.arrays     = carTemplate.arrays;
     car.bufferInfo = carTemplate.bufferInfo;
-    car.vao = carTemplate.vao;
-    car.scale = { x: 0.4, y: 0.4, z: 0.8 };
-    car.color = [0.0, 0.0, 1.0, 1.0]; // Blue color for cars
-    car.isCar = true; // Flag to identify cars
-    scene.addObject(car);
+    car.vao        = carTemplate.vao;
+
+    // Scale the car model appropriately
+    const baseXZ = (1.0 / CAR_MODEL.depth) * CAR_GLOBAL_SCALE; // base scale for X and Z
+    
+
+    car.scale = {
+      x: baseXZ,
+      y: (1.0 / CAR_MODEL.height) * CAR_GLOBAL_SCALE,
+      z: baseXZ,
+    };
+
+    car.color = [1.0, 1.0, 1.0, 1.0];   // White color 
+    car.isCar = true;
+    car.isBuilding = true; // To use building shader features
+
+    // Buscar la calle bajo el coche para tomar su dirección
+    const roadHere = roads.find(r =>
+      Math.round(r.posArray[0]) === Math.round(car.posArray[0]) &&
+      Math.round(r.posArray[2]) === Math.round(car.posArray[2])
+    );
+
+    if (roadHere && roadHere.direction !== undefined) {
+      car.rotRad.y = directionToAngleY(roadHere.direction);
+    }
+
+    // Add the car to the scene if not already present
+    if (!scene.objects.includes(car)) {
+      scene.addObject(car);
+    }
   }
 }
+
 // Draw an object with its corresponding transformations
 function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   // Prepare the vector for translation and scale
-  let v3_tra = object.posArray;
+  let v3_tra;
+
+  if (object.isCar && object.oldPosArray) {
+    const a = object.oldPosArray; // Previous position 
+    const b = object.posArray; // New position
+    const t = fract; // Goes from 0 to 1 between updates
+
+    v3_tra = [
+      a[0] + (b[0] - a[0]) * t,
+      2, // Slightly above ground
+      a[2] + (b[2] - a[2]) * t,
+    ];
+
+  } else {
+    // Normal case, no interpolation
+    v3_tra = object.posArray;
+  }
+
   let v3_sca = object.scaArray;
 
   // Create the individual transform matrices
