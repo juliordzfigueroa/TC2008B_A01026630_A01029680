@@ -5,6 +5,7 @@ in vec3 v_normal;
 in vec3 v_surfaceToLight;
 in vec3 v_surfaceToView;
 in vec4 v_color;
+in vec3 v_worldPos;
  
 // Scene uniforms
 uniform vec4 u_ambientLight;
@@ -15,13 +16,18 @@ uniform vec4 u_specularLight;
 uniform vec4 u_ambientColor;
 uniform vec4 u_diffuseColor;
 uniform vec4 u_specularColor;
-
 uniform float u_shininess;
 
 uniform float u_isBuilding;
 uniform float u_isTrafficLight;
 
 uniform vec4 u_trafficColor;
+
+const int MAX_TRAFFIC_LIGHTS = 16;
+uniform int  u_numTrafficLights;
+uniform vec3 u_trafficLightPositions[MAX_TRAFFIC_LIGHTS];
+uniform vec3 u_trafficLightColors[MAX_TRAFFIC_LIGHTS];
+uniform float u_trafficLightMaxRadius;
 
 out vec4 outColor;
 
@@ -51,7 +57,37 @@ void main() {
     vec4 specular = u_specularLight * u_specularColor * spec;
 
     vec4 litcolor = ambient + diffuse + specular;
+
     // For the color that the traffic light emits 
+    vec3 pointAccum = vec3(0.0);
+
+    for (int i = 0; i < MAX_TRAFFIC_LIGHTS; i++){
+        if (i >= u_numTrafficLights){
+            break;
+        }
+
+        vec3 lightPos = u_trafficLightPositions[i];
+        vec3 lightDir = lightPos - v_worldPos;
+        float dist = length(lightDir);
+        if (dist > u_trafficLightMaxRadius) {
+            continue;
+        }
+
+        lightDir = normalize(lightDir);
+        float lam = max(dot(N, lightDir), 0.0);
+
+        // For a simple attenuation based on a relative distance
+        float x = dist / max(u_trafficLightMaxRadius, 0.001);
+        float attenuation = 1.0 / (1.0 + 4.0 * x * x);
+
+        vec3 color = u_trafficLightColors[i];
+
+        float intesity = 0.3; 
+        pointAccum += color * lam * attenuation * intesity;
+    }
+
+    litcolor.rgb += pointAccum;
+
     vec4 emissive = u_trafficColor * u_isTrafficLight;
     
     vec4 finalColor = litcolor + emissive;

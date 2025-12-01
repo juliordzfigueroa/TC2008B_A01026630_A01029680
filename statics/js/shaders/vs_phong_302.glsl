@@ -17,6 +17,7 @@ out vec3 v_normal; // output
 out vec3 v_surfaceToLight;
 out vec3 v_surfaceToView;
 out vec4 v_color;
+out vec3 v_worldPos; 
 
 void main() {
     // Transform the position of the vertices
@@ -27,7 +28,7 @@ void main() {
 
     // Get world position of the surface
     vec3 surfaceWoldPosition = (u_world * a_position).xyz;
-
+    v_worldPos = surfaceWoldPosition;
 
     // Direction from the surface to the light
     v_surfaceToLight = u_lightWorldPosition - surfaceWoldPosition;

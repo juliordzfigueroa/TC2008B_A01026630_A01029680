@@ -1,8 +1,9 @@
 /*
- * Functions to connect to an external API to get the coordinates of agents
+ * Functions to connect to an external API to get the coordinates of agents. Adapted to the traffic simulation.
  *
- * Gilberto Echeverria
- * 2025-11-08
+ * Jin Sik Yoon A01026630
+ * Julio Cesar Rodriguez Figueroa A01029680
+ * 30/11/2025
  */
 
 
@@ -62,7 +63,8 @@ async function getCars() {
 
         if (response.ok) {
             let result = await response.json();
-            const positions = result.positions;
+
+            const positions = result.positions || [];
 
             const aliveCars = new Set(positions.map(car => car.id));
 
@@ -76,21 +78,20 @@ async function getCars() {
 
             for (const car of positions) {
                 // Create an or update Object3D for each car
-                let obj = cars.find(object3d => object3d.id === car.id);
+                const newPos = [car.x, car.y, car.z]; 
 
-                const newPos = [car.x, car.y + 1, car.z]; 
+                let obj = cars.find(object3d => object3d.id === car.id);
 
                 if (!obj) {
                     // First create the new car
-                    obj = new Object3D(car.id, [car.x, car.y + 1, car.z]);
-
-                    // Initial position 
+                    obj = new Object3D(car.id, newPos);
+                    obj.isCar = true;
+                    // Initial position
                     obj.oldPosArray = [...obj.posArray];
 
                     cars.push(obj);
                 } else {
-                    obj.oldPosArray = [...obj.posArray];
-
+                    // Update existing car position
                     obj.setPosition(newPos);
                 }
             }
@@ -159,9 +160,9 @@ async function getTrafficLights() {
           obj.state = light.state;
 
           if (light.state === false) {
-            obj.color = [1.0, 0.0, 0.0, 1.0];
+            obj.color = [1.0, 0.0, 0.0, 1.0]; // Red
           } else if (light.state === true) {
-            obj.color = [0.0, 1.0, 0.0, 1.0];
+            obj.color = [0.0, 1.0, 0.0, 1.0]; // Dark green 
           }
         }
       }
@@ -221,7 +222,6 @@ async function update() {
             const data = await response.json();
 
             // Debug the current step
-            console.log("[WebGL] Current Step: ", data.currentStep);
             await getCars();
             await getTrafficLights();
             await getDestinations();

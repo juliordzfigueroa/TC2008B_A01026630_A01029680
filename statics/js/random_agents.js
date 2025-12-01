@@ -4,7 +4,7 @@
  * Jin Sik Yoon A01026630
  * Julio César Rodríguez Figueroa A01029680
  * 
- * 28/11/2025
+ * 30/11/2025
  */
 
 'use strict';
@@ -97,10 +97,21 @@ const CAR_GLOBAL_SCALE = 0.7; // Global scale factor for cars
 
 const maxBuildings = 90; // Maximum number of buildings to place
 
+const WHEEL_MODEL = {
+  id: 'wheel',
+  path: './models/wheel.obj',
+  mtl: './models/wheel.mtl',
+  width: 1.0,
+  depth: 1.0,
+  height: 1.0,
+};
+
 let buildingMeshes = {};
 let decorationMeshes = {};
 let carMesh = null;
 let carTemplate = null;
+let wheelMesh = null;
+let wheelTemplate = null;
 
 /*
 // Variable for the scene settings
@@ -117,9 +128,16 @@ const settings = {
 // Global variables
 let colorProgramInfo = undefined;
 let gl = undefined;
-const duration = 1250; // ms
+const duration = 1000; // ms
 let elapsed = 0;
 let then = 0;
+
+// For the traffic light lights in the simulation
+const MAX_TRAFFIC_LIGHTS = 16;
+let activeTraffcLightsPositions = new Float32Array(MAX_TRAFFIC_LIGHTS * 3);
+let activeTraffcLightsColors = new Float32Array(MAX_TRAFFIC_LIGHTS * 3);
+let activeTrafficLightCount = 0;
+const TRAFFIC_LIGHT_MAX_RADIUS = 8.0;
 
 // Main function is async to be able to make the requests
 async function main() {
@@ -177,6 +195,17 @@ async function main() {
   const carObjText = await carObjRes.text();
   carMesh = carObjText;
 
+  // Load wheel model
+  const [wheelMtlRes, wheelObjRes] = await Promise.all([
+    fetch(WHEEL_MODEL.mtl),
+    fetch(WHEEL_MODEL.path),
+  ]); 
+  const wheelMtlText = await wheelMtlRes.text();
+  loadMtl(wheelMtlText);
+
+  const wheelObjText = await wheelObjRes.text();
+  wheelMesh = wheelObjText;
+
   // Initialize the agents model
   await initAgentsModel();
 
@@ -221,12 +250,20 @@ function setupObjects(scene, gl, programInfo) {
   const baseCube = new Object3D(-1);
   baseCube.prepareVAO(gl, programInfo);
 
-  // Prepare car templatef
+  // Prepare car template
   if (carMesh) {
     carTemplate = new Object3D(-1);
     carTemplate.prepareVAO(gl, programInfo, carMesh);
   } else {
     carTemplate = baseCube;
+  }
+
+  // Prepare wheel template
+  if (wheelMesh) {
+    wheelTemplate = new Object3D(-1);
+    wheelTemplate.prepareVAO(gl, programInfo, wheelMesh);
+  } else {
+    wheelTemplate = baseCube;
   }
 
   // Prepare building templates
@@ -240,18 +277,7 @@ function setupObjects(scene, gl, programInfo) {
     template.prepareVAO(gl, programInfo, objText);
     buildingTemplates[modelInfo.id] = template;
   }
-
-  /*
-  // A scaled cube to use as the ground
-  const ground = new Object3D(-3, [14, 0, 14]);
-  ground.arrays = baseCube.arrays;
-  ground.bufferInfo = baseCube.bufferInfo;
-  ground.vao = baseCube.vao;
-  ground.scale = {x: 50, y: 0.1, z: 50};
-  ground.color = [0.6, 0.6, 0.6, 1];
-  scene.addObject(ground);
-  */
-
+  
   // Add the agents to the scene
 
   // Roads
@@ -361,12 +387,49 @@ function setupObjects(scene, gl, programInfo) {
     obstacle.color = [0.2, 0.6, 0.2, 1.0]; // Greenish color
   }
 
-  
-
   // Log the total number of objects and buildings
   console.log('Total objects in scene:', scene.objects.length, 'buildings:', buildingCount);
   // Finally, synchronize car objects
   syncCarObjects();
+}
+
+function updateTrafficLights() {
+  const camPos = scene.camera.posArray;
+  const candidates = [];
+
+  for (const light of trafficLights) {
+    if (!light.posArray) continue;
+
+    const p = light.posArray;;
+    const dx = p[0] - camPos[0];
+    const dy = p[1] - camPos[1];
+    const dz = p[2] - camPos[2];
+    const distSq = dx * dx + dy * dy + dz * dz;
+
+    candidates.push({ light, distSq });
+  }
+
+  // Sort by distance
+  candidates.sort((a, b) => a.distSq - b.distSq);
+
+  activeTrafficLightCount = Math.min(candidates.length, MAX_TRAFFIC_LIGHTS);
+
+  for (let i = 0; i < activeTrafficLightCount; i++) {
+    const light = candidates[i].light;
+    const p = light.posArray;
+
+    const c = light.color || [1.0, 1.0, 1.0, 1.0];
+
+    const idx = i * 3;
+
+    activeTraffcLightsPositions[idx] = p[0];
+    activeTraffcLightsPositions[idx + 1] = p[1] + 2.0; // Slightly above the light
+    activeTraffcLightsPositions[idx + 2] = p[2];
+
+    activeTraffcLightsColors[idx] = c[0];
+    activeTraffcLightsColors[idx + 1] = c[1];
+    activeTraffcLightsColors[idx + 2] = c[2];
+  }
 }
 
 // Gives direction in radians given a direction string or number for the model to face in the simulation
@@ -374,9 +437,9 @@ function directionToAngleY(dir) {
   if (typeof dir === 'string') {
     switch (dir) {
       case 'Down':  // Moves towards +Z
-        return 0.0;
-      case 'Up':    // Moves towards -Z
         return Math.PI;
+      case 'Up':    // Moves towards -Z
+        return 0.0;
       case 'Right': // Moves towards +X
         return Math.PI * 0.5;
       case 'Left':  // Moves towards -X
@@ -386,6 +449,13 @@ function directionToAngleY(dir) {
     }
   }
   return 0.0;
+}
+
+function lerpAngle(a, b, t) {
+  let diff = b - a;
+  while (diff < -Math.PI) diff += 2 * Math.PI;
+  while (diff > Math.PI) diff -= 2 * Math.PI;
+  return a + diff * t;
 }
 
 // Function to synchronize car objects in the scene with the cars array in the API connection
@@ -401,11 +471,17 @@ function syncCarObjects() {
     return aliveCars.has(obj.id); // keep only cars that haven't get to their destination
   });
 
+  // Remove the wheels of removed cars
+  scene.objects = scene.objects.filter(obj => {
+    if (!obj.isWheel) return true; // if an object is not a wheel, keep it
+    return aliveCars.has(obj.parentCar.id); // keep only wheels of cars that haven't get to their destination
+  });
+
   for (const car of cars) {
     // Create or update Object3D for each car
-    car.arrays     = carTemplate.arrays;
+    car.arrays = carTemplate.arrays;
     car.bufferInfo = carTemplate.bufferInfo;
-    car.vao        = carTemplate.vao;
+    car.vao = carTemplate.vao;
 
     // Scale the car model appropriately
     const baseXZ = (1.0 / CAR_MODEL.depth) * CAR_GLOBAL_SCALE; // base scale for X and Z
@@ -421,14 +497,77 @@ function syncCarObjects() {
     car.isCar = true;
     car.isBuilding = true; // To use building shader features
 
-    // Buscar la calle bajo el coche para tomar su dirección
+    // Assign wheel template to car wheels
+    if (!car.wheels) {
+      car.wheels = [];
+
+      // Dimensons of the car in world coordinates
+      const carWidthWorld  = CAR_MODEL.width  * car.scale.x;
+      const carLengthWorld = CAR_MODEL.depth  * car.scale.z;
+      const carHeightWorld = CAR_MODEL.height * car.scale.y;
+
+      const SIDE_FACTOR   = 0.45;  // From center to side
+      const FRONT_FACTOR  = 0.45;  // From center to front
+      const HEIGHT_FACTOR = 0.25;  // Height from the base of the car
+
+      const sideOffset = carWidthWorld * SIDE_FACTOR;
+      const frontOffset = carLengthWorld * FRONT_FACTOR;
+      const wheelHeight = carHeightWorld * HEIGHT_FACTOR;
+
+      const wheelOffsets = [
+        {name: 'front_left',  offset: [-sideOffset + 0.05, wheelHeight + 0.2, -frontOffset + 0.09]},
+        {name: 'front_right', offset: [sideOffset - 0.05, wheelHeight + 0.2, -frontOffset + 0.09]},
+        {name: 'rear_left',   offset: [-sideOffset + 0.05, wheelHeight + 0.2, frontOffset - 0.09]},
+        {name: 'rear_right',  offset: [sideOffset - 0.05, wheelHeight + 0.2, frontOffset - 0.09]},
+      ];
+
+      for (const wheelOffset of wheelOffsets) {
+        const wheel = new Object3D(-1);
+        
+        if (wheelTemplate) {
+          wheel.arrays = wheelTemplate.arrays;
+          wheel.bufferInfo = wheelTemplate.bufferInfo;
+          wheel.vao = wheelTemplate.vao;
+        } else {
+          wheel.arrays = carTemplate.arrays;
+          wheel.bufferInfo = carTemplate.bufferInfo;
+          wheel.vao = carTemplate.vao;
+        }
+
+        wheel.isWheel = true;
+        wheel.parentCar = car;
+        wheel.localOffset = wheelOffset.offset;
+
+        // Scale the wheel appropriately
+        wheel.scale = {
+          x: 0.05,
+          y: 0.1,
+          z: 0.05,
+        };
+
+        wheel.color = [0.0, 1.0, 0.1, 1.0];
+        car.wheels.push(wheel);
+        scene.addObject(wheel);
+      }
+    }
+
+
+    // Find the road under the car to get its direction and rotate the car accordingly
     const roadHere = roads.find(r =>
       Math.round(r.posArray[0]) === Math.round(car.posArray[0]) &&
       Math.round(r.posArray[2]) === Math.round(car.posArray[2])
     );
 
     if (roadHere && roadHere.direction !== undefined) {
-      car.rotRad.y = directionToAngleY(roadHere.direction);
+      const newAngle = directionToAngleY(roadHere.direction);
+
+      if (car.targetAngleY === undefined) {
+        car.oldAngle = newAngle;
+        car.targetAngleY = newAngle;
+      } else if (car.targetAngleY !== newAngle) {
+        car.oldAngle = car.targetAngleY;
+        car.targetAngleY = newAngle;
+      }
     }
 
     // Add the car to the scene if not already present
@@ -443,20 +582,86 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   // Prepare the vector for translation and scale
   let v3_tra;
 
-  if (object.isCar && object.oldPosArray) {
+  if (object.isCar && object.oldPosArray && object.posArray) {
     const a = object.oldPosArray; // Previous position 
     const b = object.posArray; // New position
+
+    let carInterpPos;
+
     const t = fract; // Goes from 0 to 1 between updates
+      carInterpPos = [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+      ];
+    v3_tra = [carInterpPos[0], carInterpPos[1] + 0.3, carInterpPos[2]];
+    // Interpolate rotation
+    if (object.targetAngleY !== undefined && object.oldAngle !== undefined) {
+      object.rotRad.y = lerpAngle(object.oldAngle, object.targetAngleY, fract);
+    }
 
-    v3_tra = [
-      a[0] + (b[0] - a[0]) * t,
-      2, // Slightly above ground
-      a[2] + (b[2] - a[2]) * t,
-    ];
+    // Update wheels positions based on interpolated car position
 
+    if (!object.lastInterpPos) {
+      object.lastInterpPos = [...carInterpPos];
+      object.wheelSpin = 0;
+    }
+
+    const dx = carInterpPos[0] - object.lastInterpPos[0];
+    const dz = carInterpPos[2] - object.lastInterpPos[2];
+    const dist = Math.sqrt(dx * dx + dz * dz);
+
+    const WHEEL_R = 0.3; // Approximate wheel radius
+    object.wheelSpin += dist / WHEEL_R;
+
+    object.lastInterpPos = carInterpPos
+
+    v3_tra = [carInterpPos[0], carInterpPos[1] + 0.3, carInterpPos[2]];
   } else {
     // Normal case, no interpolation
     v3_tra = object.posArray;
+  }
+
+  if (object.isWheel){
+    const car = object.parentCar;
+    if (!car){
+      v3_tra = object.posArray;
+    } else {
+      // Recalculate wheel position based on car position and local offset
+      let carPos;
+      if (car.oldPosArray) {
+        const a = car.oldPosArray; // Previous position
+        const b = car.posArray; // New position
+        const t = fract; // Goes from 0 to 1 between updates
+
+        carPos = [
+          a[0] + (b[0] - a[0]) * t,
+          a[1] + (b[1] - a[1]) * t,
+          a[2] + (b[2] - a[2]) * t,
+        ];
+      } else {
+        carPos = car.posArray;
+      }
+
+      const [lx, ly, lz] = object.localOffset;
+      const angleY = car.rotRad.y;
+
+      const cosY = Math.cos(angleY);
+      const sinY = Math.sin(angleY);
+
+      const offsetX = lx * cosY - lz * sinY;
+      const offsetZ = lx * sinY + lz * cosY;
+
+      const worldX = carPos[0] + offsetX;
+      const worldY = carPos[1] + ly;
+      const worldZ = carPos[2] + offsetZ;
+
+      v3_tra = [worldX, worldY + 0.1, worldZ];
+
+      object.rotRad.y = angleY;
+
+      object.rotRad.x = object.wheelSpin || 0;
+    }
   }
 
   let v3_sca = object.scaArray;
@@ -489,7 +694,14 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   const isGround = object.material === 'ground';
   const isTrafficLight = object.isTrafficLight === true;
 
-  const trafficColor = [1.0, 0.1, 0.1, 1.0]; // Default to red
+  let trafficColor = [1.0, 0.1, 0.1, 1.0]; // Default to red
+  if (isTrafficLight && object.color) {
+    if (object.color.length === 4) {
+      trafficColor = object.color;
+    } else {
+      trafficColor = [object.color[0], object.color[1], object.color[2], 1.0];
+    }
+  }
 
   // Object color
   const color = object.color || [1.0, 1.0, 1.0, 1.0];
@@ -536,7 +748,7 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
     u_diffuseColor:  color,
     u_specularColor: color,
 
-    // Flags
+    // Flags 0 or 1 for the shader
 
     u_isBuilding: isBuilding ? 1 : 0,
 
@@ -546,6 +758,12 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
     // Traffic light specific
     u_isTrafficLight: isTrafficLight ? 1 : 0,
     u_trafficColor: trafficColor,
+
+    // Traffic lights in the scene
+    u_numTrafficLights: activeTrafficLightCount,
+    u_trafficLightPositions: activeTraffcLightsPositions,
+    u_trafficLightColors: activeTraffcLightsColors,
+    u_trafficLightMaxRadius: TRAFFIC_LIGHT_MAX_RADIUS,
   };
 
   twgl.setUniforms(programInfo, uniforms);
@@ -553,6 +771,7 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   gl.bindVertexArray(object.vao);
   twgl.drawBufferInfo(gl, object.bufferInfo);
 }
+
 // Function to do the actual display of the objects
 async function drawScene() {
   // Compute time elapsed since last frame
@@ -571,6 +790,7 @@ async function drawScene() {
   gl.enable(gl.DEPTH_TEST);
 
   scene.camera.checkKeys();
+  updateTrafficLights();
   //console.log(scene.camera);
   const viewProjectionMatrix = setupViewProjection(gl);
 
@@ -583,6 +803,13 @@ async function drawScene() {
   // Update the scene after the elapsed duration
   if (elapsed >= duration) {
     elapsed = 0;
+
+    // For the interpolation of car movement
+    for (const car of cars) {
+      if (car.posArray){
+        car.oldPosArray = [...car.posArray];
+      }
+    }
     await update();
     syncCarObjects();
   }
