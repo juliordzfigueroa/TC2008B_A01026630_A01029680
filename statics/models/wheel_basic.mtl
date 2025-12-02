@@ -1,0 +1,10 @@
+# wheel_basic.mtl
+# Material simple para rueda metálica gris
+
+newmtl WheelBasic
+Ka 0.02 0.02 0.02   
+Kd 0.10 0.10 0.10   
+Ks 0.40 0.40 0.40   
+Ns 80               
+d 1.0               
+illum 2      
