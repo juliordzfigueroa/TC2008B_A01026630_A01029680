@@ -87,11 +87,16 @@ async function getCars() {
                     obj = new Object3D(car.id, newPos);
                     obj.isCar = true;
                     // Initial position
-                    obj.oldPosArray = [...obj.posArray];
+                    obj.serverPos = [...newPos];
+                    obj.oldServerPos = [...newPos];
 
+                    obj.dirrection = car.actualDirection; // Store the direction
                     cars.push(obj);
                 } else {
                     // Update existing car position
+                    obj.oldServerPos = obj.serverPos ? [...obj.serverPos] : [...obj.posArray];
+                    obj.serverPos = [...newPos];
+                    obj.direction = car.actualDirection; // Update the direction
                     obj.setPosition(newPos);
                 }
             }
@@ -139,30 +144,34 @@ async function getTrafficLights() {
       if (trafficLights.length === 0) {
         // Create new objects
         for (const light of result.positions) {
-          const obj = new Object3D(light.id, [light.x, light.y, light.z]);
-          obj.state = light.state;
+          const obj2 = new Object3D(light.id, [light.x, light.y + 2, light.z]);
+          obj2.state = light.state;
+          const tile = new Object3D(light.id + "tile", [light.x, light.y, light.z]);
 
           if (light.state === false) {
-            obj.color = [1.0, 0.0, 0.0, 1.0];   // rojo
+            obj2.color = [1.0, 0.0, 0.0, 1.0];   // Red
           } else if (light.state === true) {
-            obj.color = [0.0, 1.0, 0.0, 1.0];   // verde
+            obj2.color = [0.0, 1.0, 0.0, 1.0];   // Green
+          } else {
+            obj2.color = [0.7, 0.7, 0.7, 1.0];   // Gray for tiles
           }
 
-          trafficLights.push(obj);
+          trafficLights.push(tile);
+          trafficLights.push(obj2);
         }
       } else {
         // To update existing objects
         for (const light of result.positions) {
-          const obj = trafficLights.find(object3d => object3d.id === light.id);
-          if (!obj) continue;
+          const obj2 = trafficLights.find(object3d => object3d.id === light.id );
+          if (!obj2) continue;
 
-          obj.setPosition([light.x, light.y, light.z]); 
-          obj.state = light.state;
+          obj2.setPosition([light.x, light.y + 2, light.z]); 
+          obj2.state = light.state;
 
           if (light.state === false) {
-            obj.color = [1.0, 0.0, 0.0, 1.0]; // Red
+            obj2.color = [1.0, 0.0, 0.0, 1.0]; // Red
           } else if (light.state === true) {
-            obj.color = [0.0, 1.0, 0.0, 1.0]; // Dark green 
+            obj2.color = [0.0, 1.0, 0.0, 1.0]; // Green
           }
         }
       }

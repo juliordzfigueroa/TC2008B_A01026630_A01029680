@@ -82,7 +82,7 @@ void main() {
 
         vec3 color = u_trafficLightColors[i];
 
-        float intesity = 0.3; 
+        float intesity = 0.1; 
         pointAccum += color * lam * attenuation * intesity;
     }
 
