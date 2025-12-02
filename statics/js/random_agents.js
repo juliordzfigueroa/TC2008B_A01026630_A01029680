@@ -544,11 +544,14 @@ function syncCarObjects() {
         wheel.parentCar = car;
         wheel.localOffset = wheelOffset.offset;
 
+        const wheelRadiusWorld = carHeightWorld * 0.3;
+        const wheelThicknessWorld = carWidthWorld * 0.6;
+
         // Scale the wheel appropriately
         wheel.scale = {
-          x: 0.05,
-          y: 0.1,
-          z: 0.05,
+          x: wheelThicknessWorld,
+          y: wheelRadiusWorld,
+          z: wheelRadiusWorld,
         };
 
         wheel.color = [0.0, 1.0, 0.1, 1.0];
@@ -591,16 +594,15 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   if (object.isCar && object.oldServerPos) {
     const a = object.oldServerPos || object.serverPos; // Previous position 
     const b = object.serverPos; // New position
-
-    let carInterpPos;
-
     let t = fract; // Goes from 0 to 1 between updates
 
-      carInterpPos = [
-        a[0] + (b[0] - a[0]) * t,
-        1.2, 
-        a[2] + (b[2] - a[2]) * t,
-      ];
+    const carInterpPos = [
+      a[0] + (b[0] - a[0]) * t,
+      1.2, 
+      a[2] + (b[2] - a[2]) * t,
+    ];
+
+    object.currentInterpPos = carInterpPos;
 
     object.setPosition(carInterpPos);
       
@@ -638,20 +640,7 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
       v3_tra = object.posArray;
     } else {
       // Recalculate wheel position based on car position and local offset
-      let carPos;
-      if (car.oldPosArray) {
-        const a = car.oldPosArray; // Previous position
-        const b = car.posArray; // New position
-        const t = fract; // Goes from 0 to 1 between updates
-
-        carPos = [
-          a[0] + (b[0] - a[0]) * t,
-          a[1] + (b[1] - a[1]) * t,
-          a[2] + (b[2] - a[2]) * t,
-        ];
-      } else {
-        carPos = car.posArray;
-      }
+      const carPos = car.currentInterpPos || car.posArray;
 
       const [lx, ly, lz] = object.localOffset;
       const angleY = car.rotRad.y;
@@ -667,6 +656,8 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
       const worldZ = carPos[2] + offsetZ;
 
       v3_tra = [worldX, worldY + 0.1, worldZ];
+
+      object.setPosition(v3_tra);
 
       object.rotRad.y = angleY;
 
