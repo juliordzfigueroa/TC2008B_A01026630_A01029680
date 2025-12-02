@@ -1,0 +1,43 @@
+# Blender 5.0.0 MTL File: 'None'
+# www.blender.org
+
+newmtl /Gold_Bumpy_5cm
+Ns 204.000015
+Ka 1.000000 1.000000 1.000000
+Kd 0.137300 0.035300 0.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+
+newmtl /llanta
+Ns 255.000015
+Ka 1.000000 1.000000 1.000000
+Kd 0.239200 0.266700 0.266700
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+
+newmtl /nematico
+Ns 255.000015
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd C:/Users/julio/Downloads/60-llanta-con-neumatico/llanta con neumatico/Plastic_Leather_A_Bump.jpg
+map_Bump C:/Users/julio/Downloads/60-llanta-con-neumatico/llanta con neumatico/Plastic_Leather_A_Bump.jpg
+
+newmtl /tornillos
+Ns 255.000015
+Ka 1.000000 1.000000 1.000000
+Kd 0.003900 0.003900 0.003900
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
