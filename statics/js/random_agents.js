@@ -100,7 +100,7 @@ const maxBuildings = 90; // Maximum number of buildings to place
 const WHEEL_MODEL = {
   id: 'wheel',
   path: './models/wheel.obj',
-  mtl: './models/wheel.mtl',
+  mtl: './models/wheel_basic.mtl',
   width: 1.0,
   depth: 1.0,
   height: 1.0,
@@ -521,10 +521,10 @@ function syncCarObjects() {
       const wheelHeight = carHeightWorld * HEIGHT_FACTOR;
 
       const wheelOffsets = [
-        {name: 'front_left',  offset: [-sideOffset + 0.05, wheelHeight + 0.2, -frontOffset + 0.09]},
-        {name: 'front_right', offset: [sideOffset - 0.05, wheelHeight + 0.2, -frontOffset + 0.09]},
-        {name: 'rear_left',   offset: [-sideOffset + 0.05, wheelHeight + 0.2, frontOffset - 0.09]},
-        {name: 'rear_right',  offset: [sideOffset - 0.05, wheelHeight + 0.2, frontOffset - 0.09]},
+        {name: 'front_left',  offset: [-sideOffset + 0.04, wheelHeight + 0.25, -frontOffset + 0.09]},
+        {name: 'front_right', offset: [sideOffset - 0.04, wheelHeight + 0.25, -frontOffset + 0.09]},
+        {name: 'rear_left',   offset: [-sideOffset + 0.04, wheelHeight + 0.25, frontOffset - 0.09]},
+        {name: 'rear_right',  offset: [sideOffset - 0.04, wheelHeight + 0.25, frontOffset - 0.09]},
       ];
 
       for (const wheelOffset of wheelOffsets) {
@@ -544,8 +544,8 @@ function syncCarObjects() {
         wheel.parentCar = car;
         wheel.localOffset = wheelOffset.offset;
 
-        const wheelRadiusWorld = carHeightWorld * 0.3;
-        const wheelThicknessWorld = carWidthWorld * 0.6;
+        const wheelRadiusWorld = carHeightWorld * 0.15;
+        const wheelThicknessWorld = carWidthWorld * 0.3;
 
         // Scale the wheel appropriately
         wheel.scale = {
@@ -554,7 +554,7 @@ function syncCarObjects() {
           z: wheelRadiusWorld,
         };
 
-        wheel.color = [0.0, 1.0, 0.1, 1.0];
+        wheel.color = [0.12, 0.12, 0.12, 1.0]; // Dark gray for the wheels
         car.wheels.push(wheel);
         scene.addObject(wheel);
       }
@@ -694,6 +694,7 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   const isBuilding = object.isBuilding === true;
   const isGround = object.material === 'ground';
   const isTrafficLight = object.isTrafficLight === true;
+  const isWheel = object.isWheel === true;
 
   let trafficColor = [1.0, 0.1, 0.1, 1.0]; // Default to red
   if (isTrafficLight && object.color) {
@@ -719,13 +720,18 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
     ambientLight  = [1.0, 1.0, 1.0, 1.0];
     diffuseLight  = [0.2, 0.2, 0.2, 1.0]; 
     specularLight = [0.0, 0.0, 0.0, 1.0]; 
-    shininess     = 2.0;
+    shininess = 2.0;
+  } else if (isWheel) { // For the car wheels
+    ambientLight  = [0.1, 0.1, 0.1, 1.0];
+    diffuseLight  = [0.6, 0.6, 0.6, 1.0];
+    specularLight = [0.3, 0.3, 0.3, 1.0];
+    shininess = 80.0;
   } else {
     // For buildings and other objects
     ambientLight  = [0.2, 0.2, 0.2, 1.0];
     diffuseLight  = [1.0, 1.0, 1.0, 1.0];
     specularLight = [1.0, 1.0, 1.0, 1.0];
-    shininess     = 20.0;
+    shininess = 20.0;
   }
 
   // Uniforms expected by the Phong shaders
