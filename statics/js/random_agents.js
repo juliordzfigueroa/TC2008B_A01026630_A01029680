@@ -294,13 +294,21 @@ function setupObjects(scene, gl, programInfo) {
   // Traffic Lights
 
   for (const light of trafficLights){
-    light.arrays = baseCube.arrays;
-    light.bufferInfo = baseCube.bufferInfo;
-    light.vao = baseCube.vao;
-    light.scale = { x: 0.4, y: 0.8, z: 0.4 }; 
-    light.isTrafficLight = true; // Flag to identify traffic lights
-    
-    scene.addObject(light);
+    if (light.id.toString().endsWith("tile")) { // Asure that the end of the id of the object is "tile" to indicate it is the base of the traffic light
+      light.arrays = baseCube.arrays;
+      light.bufferInfo = baseCube.bufferInfo;
+      light.vao = baseCube.vao;
+      light.scale = { x: 0.5, y: 0.5, z: 0.5 };
+      light.color = [0.7, 0.7, 0.7, 1.0]; // Gray for the tile
+      scene.addObject(light);
+    } else {
+      light.arrays = baseCube.arrays;
+      light.bufferInfo = baseCube.bufferInfo;
+      light.vao = baseCube.vao;
+      light.scale = { x: 0.1, y: 0.15, z: 0.1 }; 
+      light.isTrafficLight = true; // Flag to identify traffic lights
+      scene.addObject(light);
+    }
   }
 
   // Destinations
@@ -352,12 +360,12 @@ function setupObjects(scene, gl, programInfo) {
     if (!template) continue; // in case something went wrong creating the template
 
     // Create a new Object3D for the building in this cell
-    const building = new Object3D(cell.id + '_bldg', [x, y, z]);
+    const building = new Object3D(cell.id + 'building', [x, y, z]);
 
     // Reuse VAO and buffers from the template
-    building.arrays     = template.arrays;
+    building.arrays = template.arrays;
     building.bufferInfo = template.bufferInfo;
-    building.vao        = template.vao;
+    building.vao = template.vao;
 
     building.isBuilding = true;
 
@@ -386,18 +394,16 @@ function setupObjects(scene, gl, programInfo) {
     if (!scene.objects.includes(obstacle)) continue; // Skip if not in scene
     obstacle.color = [0.2, 0.6, 0.2, 1.0]; // Greenish color
   }
-
-  // Log the total number of objects and buildings
-  console.log('Total objects in scene:', scene.objects.length, 'buildings:', buildingCount);
   // Finally, synchronize car objects
   syncCarObjects();
 }
 
-function updateTrafficLights() {
+function updateTrafficLights() { // Update the active traffic lights arrays for the shader for the lights effect
   const camPos = scene.camera.posArray;
   const candidates = [];
 
   for (const light of trafficLights) {
+    if (light.id.toString().endsWith("tile")) continue; // Skip tiles
     if (!light.posArray) continue;
 
     const p = light.posArray;;
@@ -418,12 +424,12 @@ function updateTrafficLights() {
     const light = candidates[i].light;
     const p = light.posArray;
 
-    const c = light.color || [1.0, 1.0, 1.0, 1.0];
+    const c = light.color;
 
     const idx = i * 3;
 
     activeTraffcLightsPositions[idx] = p[0];
-    activeTraffcLightsPositions[idx + 1] = p[1] + 2.0; // Slightly above the light
+    activeTraffcLightsPositions[idx + 1] = p[1] + 5.0; // Slightly above the light
     activeTraffcLightsPositions[idx + 2] = p[2];
 
     activeTraffcLightsColors[idx] = c[0];
@@ -582,19 +588,23 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   // Prepare the vector for translation and scale
   let v3_tra;
 
-  if (object.isCar && object.oldPosArray && object.posArray) {
-    const a = object.oldPosArray; // Previous position 
-    const b = object.posArray; // New position
+  if (object.isCar && object.oldServerPos) {
+    const a = object.oldServerPos || object.serverPos; // Previous position 
+    const b = object.serverPos; // New position
 
     let carInterpPos;
 
-    const t = fract; // Goes from 0 to 1 between updates
+    let t = fract; // Goes from 0 to 1 between updates
+
       carInterpPos = [
         a[0] + (b[0] - a[0]) * t,
-        a[1] + (b[1] - a[1]) * t,
+        1.2, 
         a[2] + (b[2] - a[2]) * t,
       ];
-    v3_tra = [carInterpPos[0], carInterpPos[1] + 0.3, carInterpPos[2]];
+
+    object.setPosition(carInterpPos);
+      
+    v3_tra = [carInterpPos[0], carInterpPos[1], carInterpPos[2]];
     // Interpolate rotation
     if (object.targetAngleY !== undefined && object.oldAngle !== undefined) {
       object.rotRad.y = lerpAngle(object.oldAngle, object.targetAngleY, fract);
@@ -704,7 +714,7 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   }
 
   // Object color
-  const color = object.color || [1.0, 1.0, 1.0, 1.0];
+  const color = object.color;
 
   // Camera position
   const cameraPos = scene.camera.posArray;
@@ -803,13 +813,6 @@ async function drawScene() {
   // Update the scene after the elapsed duration
   if (elapsed >= duration) {
     elapsed = 0;
-
-    // For the interpolation of car movement
-    for (const car of cars) {
-      if (car.posArray){
-        car.oldPosArray = [...car.posArray];
-      }
-    }
     await update();
     syncCarObjects();
   }
