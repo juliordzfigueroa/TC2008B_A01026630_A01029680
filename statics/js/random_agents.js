@@ -11,17 +11,17 @@
 
 import * as twgl from 'twgl-base.js';
 import GUI from 'lil-gui';
-import { M4 } from './3d-lib.js';
-import { Scene3D } from './scene3d.js';
-import { Object3D } from './object3d.js';
-import { Camera3D } from './camera3d.js';
-import { loadMtl } from './obj_loader.js';
+import { M4 } from './libs/3d-lib.js';
+import { Scene3D } from './libs/scene3d.js';
+import { Object3D } from './libs/object3d.js';
+import { Camera3D } from './libs/camera3d.js';
+import { loadMtl } from './libs/obj_loader.js';
 
 import {
   cars, obstacles, trafficLights, destinations, roads, 
   initAgentsModel, update, getCars, getObstacles,
   getTrafficLights, getDestinations, getRoads
-} from './api_connection.js';
+} from './libs/api_connection.js';
 
 // Shaders used in the program
 import vsGLSL from './shaders/vs_phong_302.glsl?raw';
@@ -36,56 +36,42 @@ const BUILDING_HEIGHT_CELLS = 6;  // for example, 6 cells high
 const BUILDING_MODELS = [
   {
     id: 'b1',
-    path: './models/building1.obj',
-    mtl: './models/building1.mtl',
+    path: './models/objs/building1.obj',
+    mtl: './models/mtls/building1.mtl',
     width: 10.46,
     depth: 10.34,
     height: 22.68,
   },
   {
     id: 'b2',
-    path: './models/building2.obj',
-    mtl: './models/building2.mtl',
+    path: './models/objs/building2.obj',
+    mtl: './models/mtls/building2.mtl',
     width: 11.08,
     depth: 11.00,
     height: 38.71,
   },
   {
     id: 'b3',
-    path: './models/building3.obj',
-    mtl: './models/building3.mtl',
+    path: './models/objs/building3.obj',
+    mtl: './models/mtls/building3.mtl',
     width: 17.46,
     depth: 17.46,
     height: 37.61,
   },
   {
     id: 'b4',
-    path: './models/building4.obj',
-    mtl: './models/building4.mtl',
+    path: './models/objs/building4.obj',
+    mtl: './models/mtls/building4.mtl',
     width: 14.10,
     depth: 14.10,
     height: 55.61,
   },
 ];
 
-// For free obstacles decorations
-const DECORATION_SCALE = 0.5; // Global scale factor for decorations
-
-const DECORATION_MODELS = [
-  {
-    id: 'dog',
-    path: './models/13463_Australian_Cattle_Dog_v3.obj',
-    mtl: './models/13463_Australian_Cattle_Dog_v3.mtl',
-    width: 2.0,
-    depth: 1.0,
-    height: 1.5,
-  },
-];
-
 const CAR_MODEL = {
   id: 'car',
-  path: './models/lowpoly_car.obj',
-  mtl:  './models/lowpoly_car.mtl',
+  path: './models/objs/lowpoly_car.obj',
+  mtl:  './models/mtls/lowpoly_car.mtl',
   width:  2.7,   
   depth:  4.8,  
   height: 1.6,
@@ -99,15 +85,14 @@ const maxBuildings = 90; // Maximum number of buildings to place
 
 const WHEEL_MODEL = {
   id: 'wheel',
-  path: './models/wheel.obj',
-  mtl: './models/wheel_basic.mtl',
+  path: './models/objs/wheel.obj',
+  mtl: './models/mtls/wheel_basic.mtl',
   width: 1.0,
   depth: 1.0,
   height: 1.0,
 };
 
 let buildingMeshes = {};
-let decorationMeshes = {};
 let carMesh = null;
 let carTemplate = null;
 let wheelMesh = null;
@@ -492,7 +477,6 @@ function syncCarObjects() {
     // Scale the car model appropriately
     const baseXZ = (1.0 / CAR_MODEL.depth) * CAR_GLOBAL_SCALE; // base scale for X and Z
     
-
     car.scale = {
       x: baseXZ,
       y: (1.0 / CAR_MODEL.height) * CAR_GLOBAL_SCALE,
@@ -502,6 +486,12 @@ function syncCarObjects() {
     car.color = [1.0, 1.0, 1.0, 1.0];   // White color 
     car.isCar = true;
     car.isBuilding = true; // To use building shader features
+
+    if (!car.serverPos || !car.oldServerPos) {
+      const p = car.posArray || [0, 0, 0];
+      car.serverPos = [...p];
+      car.oldServerPos = [...p];
+    }
 
     // Assign wheel template to car wheels
     if (!car.wheels) {
@@ -560,25 +550,30 @@ function syncCarObjects() {
       }
     }
 
+    // Find the road under the car to get its direction and rotate the car accordingly, using previous and target positions for smooth rotation
+    if (car.oldServerPos && car.serverPos) {
+      // Find the road corresponding to the old and new positions
+      const roadHere = roads.find(r => 
+        Math.round(r.posArray[0]) === Math.round(car.posArray[0]) &&
+        Math.round(r.posArray[2]) === Math.round(car.posArray[2])
+      );
 
-    // Find the road under the car to get its direction and rotate the car accordingly
-    const roadHere = roads.find(r =>
-      Math.round(r.posArray[0]) === Math.round(car.posArray[0]) &&
-      Math.round(r.posArray[2]) === Math.round(car.posArray[2])
-    );
+      if (roadHere && roadHere.direction !== undefined) {
+        const newAngle = directionToAngleY(roadHere.direction);
 
-    if (roadHere && roadHere.direction !== undefined) {
-      const newAngle = directionToAngleY(roadHere.direction);
-
-      if (car.targetAngleY === undefined) {
-        car.oldAngle = newAngle;
-        car.targetAngleY = newAngle;
-      } else if (car.targetAngleY !== newAngle) {
-        car.oldAngle = car.targetAngleY;
-        car.targetAngleY = newAngle;
+        // Set the angle for the rotation interpolation
+        if (car.targetAngleY === undefined || car.oldAngle === undefined) { // If the direction is not set yet
+          car.oldAngle = newAngle;
+          car.targetAngleY = newAngle;
+          car.rotRad.y = newAngle;
+          car.turning = false; // Flag to indicate if the car is turning
+        } else if (car.targetAngleY !== newAngle) { // Only turn if the direction has changed
+          car.oldAngle = car.targetAngleY;
+          car.targetAngleY = newAngle;
+          car.turning = true; // Flag to indicate if the car is turning
+        }
       }
     }
-
     // Add the car to the scene if not already present
     if (!scene.objects.includes(car)) {
       scene.addObject(car);
@@ -608,8 +603,17 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
       
     v3_tra = [carInterpPos[0], carInterpPos[1], carInterpPos[2]];
     // Interpolate rotation
-    if (object.targetAngleY !== undefined && object.oldAngle !== undefined) {
-      object.rotRad.y = lerpAngle(object.oldAngle, object.targetAngleY, fract);
+    if (object.turning && object.targetAngleY !== undefined && object.oldAngle !== undefined) {
+      const t = fract;
+      object.rotRad.y = lerpAngle(object.oldAngle, object.targetAngleY, t);
+
+      if (t >= 0.999) {
+        object.oldAngle = object.targetAngleY;
+        object.rotRad.y = object.targetAngleY;
+        object.turning = false; // Reset turning flag when interpolation is complete
+      }
+    } else if (object.targetAngleY !== undefined && object.oldAngle !== undefined) {
+      object.rotRad.y = object.targetAngleY; 
     }
 
     // Update wheels positions based on interpolated car position
@@ -619,12 +623,25 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
       object.wheelSpin = 0;
     }
 
+    const ESP = 0.0001; // Small epsilon to avoid division by zero
     const dx = carInterpPos[0] - object.lastInterpPos[0];
     const dz = carInterpPos[2] - object.lastInterpPos[2];
     const dist = Math.sqrt(dx * dx + dz * dz);
 
-    const WHEEL_R = 0.3; // Approximate wheel radius
-    object.wheelSpin += dist / WHEEL_R;
+    if (dist > ESP) {
+      const yaw = object.rotRad.y;
+      const forwardX = Math.sin(yaw);
+      const forwardZ = Math.cos(yaw);
+
+      const moveX = dx;
+      const moveZ = dz;
+
+      const dot = forwardX * moveX + forwardZ * moveZ;
+      const sign = dot >= 0 ? 1 : -1;
+
+      const WHEEL_R = 0.3; // Approximate wheel radius
+      object.wheelSpin += (dist / WHEEL_R);
+    }
 
     object.lastInterpPos = carInterpPos
 
@@ -648,11 +665,15 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
       const cosY = Math.cos(angleY);
       const sinY = Math.sin(angleY);
 
-      const offsetX = lx * cosY - lz * sinY;
-      const offsetZ = lx * sinY + lz * cosY;
+      const offsetX = lx * cosY + lz * sinY;
+      const offsetZ = -lx * sinY + lz * cosY;
+
+      const modelCenterY = 0.5;
+      const wheelScaleY = object.scale ? object.scale.y : object.scaArray[1];
+      const centerOffsetY = modelCenterY * wheelScaleY;
 
       const worldX = carPos[0] + offsetX;
-      const worldY = carPos[1] + ly;
+      const worldY = carPos[1] + ly - centerOffsetY;
       const worldZ = carPos[2] + offsetZ;
 
       v3_tra = [worldX, worldY + 0.1, worldZ];
@@ -661,7 +682,7 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
 
       object.rotRad.y = angleY;
 
-      object.rotRad.x = object.wheelSpin || 0;
+      object.rotRad.x = (car.wheelSpin || 0);
     }
   }
 
