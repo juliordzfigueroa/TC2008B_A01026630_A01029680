@@ -13,6 +13,7 @@ class Car(CellAgent):
         self.route = []                 # Planned route
         self.route_index = 0            # Next step in route
         self.stuck_steps = 0            # Steps stuck without moving
+        self.arrived = False            # Arrival status
 
     # Verify if cell is free of cars or obstacles (apartments)
     # Returns True if free, False otherwise
@@ -50,7 +51,14 @@ class Car(CellAgent):
                 dx, dy = directions[sign]
                 p = (x + dx, y + dy)
                 if p in roads and p not in visited:
-                    neighbors.append(p)
+                    if p != goal:
+                        cell_agents = self.model.grid[p].agents
+                        if any(isinstance(a, Destination) for a in cell_agents):
+                            pass
+                        else:
+                            neighbors.append(p)
+                    else:
+                        neighbors.append(p)
 
             # Allowed lateral neighbors only if they do not contradict the neighbor's arrow
             for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
@@ -64,6 +72,12 @@ class Car(CellAgent):
                     continue
                 if q in directions:
                     if directions[q] == (-dx, -dy):
+                        continue
+                
+                # Avoid going into destination cells unless it's the goal
+                if p != goal:
+                    cell_agents = self.model.grid[p].agents
+                    if any(isinstance(a, Destination) for a in cell_agents):
                         continue
                 neighbors.append(p)
 
@@ -165,6 +179,18 @@ class Car(CellAgent):
                     from .agent import Traffic_Light
                     if any(isinstance(a, Traffic_Light) for a in side_cell.agents):
                         continue
+                    
+                    if facing in ("Right", "Left"):
+                        adjacent_side_pos = (cx, cy + sy)
+                    else:
+                        adjacent_side_pos = (cx + sx, cy)
+
+                    ax, ay = adjacent_side_pos
+                    if 0 <= ax < self.model.grid.width and 0 <= ay < self.model.grid.height:
+                        adj_cell = self.model.grid[adjacent_side_pos]
+                        from .agent import Obstacle, Car
+                        if any(isinstance(a, (Obstacle, Car)) for a in adj_cell.agents):
+                            continue
 
                     # Must have same direction sign
                     side_sign = self.model.get_map_sign((lx, ly))
@@ -186,8 +212,12 @@ class Car(CellAgent):
                 return
 
         # Remove the car if it reached to the destination
-        if self.cell.coordinate == self.target.cell.coordinate:
+        if getattr(self, "arrived", False):
             self.remove()
+            return
+        if self.cell.coordinate == self.target.cell.coordinate:
+            self.arrived = True
+            return
 
 # -----
 # Other Agents: Traffic Light, Obstacle, Destination, Road

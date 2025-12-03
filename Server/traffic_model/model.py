@@ -2,11 +2,12 @@ from mesa import Model                                                  # Base c
 from mesa.discrete_space import OrthogonalMooreGrid                     # Grid with Moore neighborhood
 from .agent import Car, Traffic_Light, Obstacle, Destination, Road      # Import agents
 import json, random                                                     # For map loading and randomness
+from mesa.datacollection import DataCollector                           # For data collection
 
 # Urban traffic model using cars, traffic lights, roads, obstacles, and destinations.
 # Cars navigate the map using BFS and avoid collisions and red traffic lights.
 class CityModel(Model):
-    def __init__(self, N, seed=42):
+    def __init__(self, N, seed=42, spawn_interval = 1):
         super().__init__(seed=seed)
 
         # Load map dictionary
@@ -17,9 +18,10 @@ class CityModel(Model):
         self.cars = []
         self.destinations = []
         self.road_positions = []
+        self.last_spawn_step = -1
 
         # Load base map
-        with open("traffic_model/maps/2023_base.txt") as baseFile:
+        with open("traffic_model/maps/2025_base.txt") as baseFile:
             lines = baseFile.readlines()
             self.width = len(lines[0].strip())
             self.height = len(lines)
@@ -75,6 +77,22 @@ class CityModel(Model):
 
         self.steps = 0
         self.running = True
+        self.spawn_interval = int(spawn_interval) if int(spawn_interval) > 0 else 1
+
+        # Statistics counters
+        self.total_spawned = 0      # total cars created since simulation start
+        self.total_arrived = 0      # total cars that reached a destination
+
+        # DataCollector for visualization/stats (optional)
+        self.datacollector = DataCollector(
+            model_reporters={
+                "Total Arrived": lambda m: m.total_arrived,
+                "Current Cars": lambda m: len(m.cars),
+                "Total Spawned": lambda m: m.total_spawned,
+            }
+        )
+        # collect initial state
+        self.datacollector.collect(self)
 
     # Get the map character at a position
     def get_map_sign(self, pos):
@@ -88,6 +106,11 @@ class CityModel(Model):
 
     # Spawn cars at the start positions
     def spawn_cars(self):
+        # Prevent running spawn multiple times for the same model step
+        if getattr(self, "last_spawn_step", None) == self.steps:
+            return 0
+
+        spawned_count = 0
         for pos in self.start_positions:
             cell = self.grid[pos]
 
@@ -99,15 +122,73 @@ class CityModel(Model):
             if any(isinstance(a, Car) for a in cell.agents):
                 continue
 
-            # Create the car: assigning cell places it in the cell
+            # Create the car and register it
             new_car = Car(self, cell)
+            # place in cell explicitly if your grid uses cell.agents list
+            if hasattr(cell, "agents"):
+                cell.agents.append(new_car)
+            new_car.cell = cell
             self.cars.append(new_car)
+            self.total_spawned += 1
+            spawned_count += 1
+
+            # Assign a destination and precompute route so car is not left without route
+            dest = self.get_random_destination()
+            if dest is not None and hasattr(dest, "cell") and hasattr(dest.cell, "coordinate"):
+                new_car.target = dest
+                if hasattr(new_car.cell, "coordinate"):
+                    start_pos = tuple(new_car.cell.coordinate)
+                    target_pos = tuple(dest.cell.coordinate)
+                    route = new_car.bfs_path(start_pos, target_pos)
+                    if route:
+                        new_car.route = route
+                        if start_pos in route:
+                            new_car.route_index = route.index(start_pos) + 1
+                        else:
+                            new_car.route_index = 1
+                    else:
+                        new_car.route = []
+                        new_car.route_index = 1
+                else:
+                    new_car.route = []
+                    new_car.route_index = 1
+            else:
+                new_car.route = []
+                new_car.route_index = 1
+
+        self.last_spawn_step = self.steps
+        return spawned_count
+    
+    def _cleanup_arrived(self):
+        """Remove cars that reached their destination and update counters."""
+        arrived = [c for c in list(self.cars) if getattr(c, "arrived", False)]
+        for c in arrived:
+            # Remove from cell agent list if present
+            if hasattr(c, "cell") and getattr(c.cell, "agents", None) is not None:
+                agents = c.cell.agents
+                if c in agents:
+                    agents.remove(c)
+            # Remove from model list
+            if c in self.cars:
+                self.cars.remove(c)
+            # Update arrived counter
+            self.total_arrived += 1
 
     # Step the model
     def step(self):
-        # Modify car spawn interval
-        if self.steps % 3 == 0:
-            self.spawn_cars()
-
-        # Advance all agents
+        # Move existing agents
         self.agents.shuffle_do("step")
+            
+        # Attempt spawn and check result
+        if self.steps % self.spawn_interval == 0:
+            spawned = self.spawn_cars()
+            print(f"Spawned {spawned} cars at step {self.steps}")
+
+            # If there are exactly 4 start positions and none spawned, stop simulation
+            if len(self.start_positions) == 4 and spawned == 0:
+                self.running = False
+                self.stopped_reason = "All 4 spawnpoints blocked on spawn step"
+        self._cleanup_arrived()
+        # Collect stats
+        if hasattr(self, "datacollector"):
+            self.datacollector.collect(self)
