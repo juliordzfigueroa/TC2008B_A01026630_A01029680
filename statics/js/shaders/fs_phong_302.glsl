@@ -6,11 +6,16 @@ in vec3 v_surfaceToLight;
 in vec3 v_surfaceToView;
 in vec4 v_color;
 in vec3 v_worldPos;
+in vec2 v_texCoord;
  
 // Scene uniforms
 uniform vec4 u_ambientLight;
 uniform vec4 u_diffuseLight;
 uniform vec4 u_specularLight;
+
+// For textures
+uniform sampler2D u_diffuseMap;
+uniform int u_useTexture;
 
 // Model uniforms
 uniform vec4 u_ambientColor;
@@ -38,17 +43,25 @@ void main() {
     vec3 V = normalize(v_surfaceToView);
     vec3 H = normalize(L + V);
 
-    // If the object is a building
-
-    vec4 baseDiffuseColor = mix(u_diffuseColor, v_color, u_isBuilding); // Diffuse color for the buildings
-    vec4 baseAmbientColor = mix(u_ambientColor, v_color, u_isBuilding); // Ambient color for teh buildings
-
     // CALCULATIONS FOR THE AMBIENT, DIFFUSE and SPECULAR COMPONENTS
     float lambert = max(dot(N, L), 0.0);
     float spec = 0.0;
 
     if (lambert > 0.0){
         spec = pow(max(dot(N, H), 0.0), u_shininess);
+    }
+
+    // If the object is a building
+
+    vec4 baseDiffuseColor = mix(u_diffuseColor, v_color, u_isBuilding); // Diffuse color for the buildings
+    vec4 baseAmbientColor = mix(u_ambientColor, v_color, u_isBuilding); // Ambient color for teh buildings
+
+    // If the object has texture
+
+    if (u_useTexture == 1){
+        vec4 tex = texture(u_diffuseMap, v_texCoord);
+        baseDiffuseColor *= tex;
+        baseAmbientColor *= tex;
     }
 
     // Compute the three parts of the Phong lighting model
@@ -78,11 +91,12 @@ void main() {
 
         // For a simple attenuation based on a relative distance
         float x = dist / max(u_trafficLightMaxRadius, 0.001);
-        float attenuation = 1.0 / (1.0 + 4.0 * x * x);
+        float attenuation = 1.0 - x;
+        attenuation *= attenuation; // For smoother atenuation in the object the further they are from the traffic light
 
         vec3 color = u_trafficLightColors[i];
 
-        float intesity = 0.1; 
+        float intesity = 0.5; 
         pointAccum += color * lam * attenuation * intesity;
     }
 
@@ -90,7 +104,7 @@ void main() {
 
     vec4 emissive = u_trafficColor * u_isTrafficLight;
     
-    vec4 finalColor = litcolor + emissive;
+    vec4 finalColor = litcolor + emissive ;
 
     finalColor.a = baseDiffuseColor.a;
 

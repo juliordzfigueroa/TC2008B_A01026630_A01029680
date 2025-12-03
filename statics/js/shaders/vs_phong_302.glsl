@@ -2,6 +2,7 @@
 in vec4 a_position; // input | unique atributes for each vertex
 in vec3 a_normal;
 in vec4 a_color; 
+in vec2 a_texCoord;
 
 // Scene uniforms
 uniform vec3 u_lightWorldPosition; // atributes for all vertexes
@@ -17,6 +18,7 @@ out vec3 v_normal; // output
 out vec3 v_surfaceToLight;
 out vec3 v_surfaceToView;
 out vec4 v_color;
+out vec2 v_texCoord;
 out vec3 v_worldPos; 
 
 void main() {
@@ -35,6 +37,8 @@ void main() {
 
     // Direction from the surface to the view
     v_surfaceToView = u_viewWorldPosition - surfaceWoldPosition;
+
+    v_texCoord = a_texCoord; // For textures
 
     // Color of the vertex for the fragment shader
     v_color = a_color;

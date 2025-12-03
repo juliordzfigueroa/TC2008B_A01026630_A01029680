@@ -19,7 +19,7 @@ class CityModel(Model):
         self.road_positions = []
 
         # Load base map
-        with open("traffic_model/maps/2023_base.txt") as baseFile:
+        with open("traffic_model/maps/2025_base.txt") as baseFile:
             lines = baseFile.readlines()
             self.width = len(lines[0].strip())
             self.height = len(lines)
