@@ -124,7 +124,6 @@ class CityModel(Model):
 
             # Create the car and register it
             new_car = Car(self, cell)
-            # place in cell explicitly if your grid uses cell.agents list
             if hasattr(cell, "agents"):
                 cell.agents.append(new_car)
             new_car.cell = cell
@@ -132,7 +131,7 @@ class CityModel(Model):
             self.total_spawned += 1
             spawned_count += 1
 
-            # Assign a destination and precompute route so car is not left without route
+            # After spawning, assign a random destination and compute route
             dest = self.get_random_destination()
             if dest is not None and hasattr(dest, "cell") and hasattr(dest.cell, "coordinate"):
                 new_car.target = dest
@@ -158,21 +157,6 @@ class CityModel(Model):
 
         self.last_spawn_step = self.steps
         return spawned_count
-    
-    def _cleanup_arrived(self):
-        """Remove cars that reached their destination and update counters."""
-        arrived = [c for c in list(self.cars) if getattr(c, "arrived", False)]
-        for c in arrived:
-            # Remove from cell agent list if present
-            if hasattr(c, "cell") and getattr(c.cell, "agents", None) is not None:
-                agents = c.cell.agents
-                if c in agents:
-                    agents.remove(c)
-            # Remove from model list
-            if c in self.cars:
-                self.cars.remove(c)
-            # Update arrived counter
-            self.total_arrived += 1
 
     # Step the model
     def step(self):
@@ -180,7 +164,7 @@ class CityModel(Model):
         self.agents.shuffle_do("step")
             
         # Attempt spawn and check result
-        if self.steps % self.spawn_interval == 0:
+        if self.steps == 1 or (self.steps - 1) % self.spawn_interval == 0:
             spawned = self.spawn_cars()
             print(f"Spawned {spawned} cars at step {self.steps}")
 
@@ -188,7 +172,7 @@ class CityModel(Model):
             if len(self.start_positions) == 4 and spawned == 0:
                 self.running = False
                 self.stopped_reason = "All 4 spawnpoints blocked on spawn step"
-        self._cleanup_arrived()
+
         # Collect stats
         if hasattr(self, "datacollector"):
             self.datacollector.collect(self)

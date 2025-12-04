@@ -12,7 +12,6 @@ class Car(CellAgent):
         self.target = None              # Assigned destination
         self.route = []                 # Planned route
         self.route_index = 0            # Next step in route
-        self.stuck_steps = 0            # Steps stuck without moving
         self.arrived = False            # Arrival status
 
     # Verify if cell is free of cars or obstacles (apartments)
@@ -156,6 +155,26 @@ class Car(CellAgent):
                 if current_sign in ["s","S"]:
                     return
                 
+                # Check if front car is going in the same direction
+                # To avoid cutting off cars going in different directions
+                from .agent import Car
+                front_cars = [a for a in self.model.grid[front].agents if isinstance(a, Car)]
+                if front_cars:
+                    front_car = front_cars[0]
+                    
+                    # If front car has no route or no next step, do not rebase
+                    if not getattr(front_car, "route", None) or front_car.route_index >= len(front_car.route):
+                        return
+                    
+                    # Get front car's movement direction
+                    f_cx, f_cy = front_car.cell.coordinate
+                    f_nx, f_ny = front_car.route[front_car.route_index]
+                    f_dx, f_dy = f_nx - f_cx, f_ny - f_cy
+
+                    # If the front car is not going the same direction as our desired forward (dx, dy), wait
+                    if (f_dx, f_dy) != (dx, dy):
+                        return
+
                 # Check diagonal cells for rebase
                 diagonal = {
                     "Right": [ (cx + 1, cy + 1), (cx + 1, cy - 1) ],
