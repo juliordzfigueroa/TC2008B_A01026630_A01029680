@@ -4,7 +4,7 @@
  * Jin Sik Yoon A01026630
  * Julio César Rodríguez Figueroa A01029680
  * 
- * 03/12/2025
+ * 04/12/2025
  */
 
 'use strict';
@@ -32,10 +32,20 @@ import { BUILDING_MODELS, CAR_MODEL, WHEEL_MODEL, WHEEL_TEXTURE_PATH, ROAD_TEXTU
 
 const scene = new Scene3D();
 
+// Variable for the scene settings
+const settings = {
+    camDistance: 10,
+    camAzimuth: 4,
+    camElevation: 0.8,
+    trafficIntensity: 0.6,
+    sceneBrightness: 1.0,
+    duration: 1000,
+};
+
 // Global variables
 let colorProgramInfo = undefined;
 let gl = undefined;
-const duration = 1000; // ms
+let duration = settings.duration; // ms
 let elapsed = 0;
 let then = 0;
 const EPS = 0.0001; // Small epsilon to avoid division by zero when used in interpolations
@@ -64,15 +74,6 @@ let wheelMesh = null; // To store wheel mesh loaded from file
 let wheelTemplate = null; // Template for wheel objects
 let wheelTexture = null; // Texture for wheels
 let roadTexture = null; // Texture for roads
-
-// Variable for the scene settings
-const settings = {
-    camDistance: 10,
-    camAzimuth: 4,
-    camElevation: 0.8,
-    trafficIntensity: 0.6,
-    sceneBrightness: 1.0,
-};
 
 // Function to update the camera parameters from the settings with the UI
 function updateCamera() {
@@ -883,6 +884,12 @@ function setupUI() {
   sceneFolder
     .add(settings, 'sceneBrightness', 0.0, 2.0, 0.01)
     .name('Brightness');
+  const durationControl = sceneFolder
+    .add(settings, 'duration', 200, 2000, 50)
+    .name('Update Duration (ms)');
+  durationControl.onChange((value) => { // Update the global duration variable
+    duration = value;
+  });
   camFolder.close();
   lightFolder.close();
   sceneFolder.close();
