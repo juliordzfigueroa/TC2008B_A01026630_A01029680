@@ -86,14 +86,12 @@ async function getCars() {
                     // First create the new car
                     obj = new Object3D(car.id, newPos);
                     obj.isCar = true;
-                    // Initial position
+                    // Initial position in Mesa server
                     obj.serverPos = [...newPos];
                     obj.oldServerPos = [...newPos];
-
-                    obj.dirrection = car.actualDirection; // Store the direction
                     cars.push(obj);
                 } else {
-                    // Update existing car position
+                    // Update existing car position in the simulation using the server position
                     obj.oldServerPos = obj.serverPos ? [...obj.serverPos] : [...obj.posArray];
                     obj.serverPos = [...newPos];
                     obj.direction = car.actualDirection; // Update the direction
@@ -124,8 +122,6 @@ async function getObstacles() {
                 const newObstacle = new Object3D(obstacle.id, [obstacle.x, obstacle.y, obstacle.z]);
                 obstacles.push(newObstacle);
             }
-            // Log the obstacles array
-            //console.log("Obstacles:", obstacles);
         }
 
     } catch (error) {
@@ -207,7 +203,7 @@ async function getRoads() {
 
             for (const road of result.positions) {
                 const newRoad = new Object3D(road.id, [road.x, road.y, road.z]);
-                newRoad.color = [0.2, 0.2, 0.2, 1.0]; // Gris oscuro para las carreteras
+                newRoad.color = [0.2, 0.2, 0.2, 1.0]; // Dark gray for roads
                 newRoad['direction'] = road.direction;
                 roads.push(newRoad);
             }
@@ -235,8 +231,6 @@ async function update() {
             await getTrafficLights();
             await getDestinations();
             await getRoads();
-            // Log a message indicating that the agents have been updated
-            // console.log("Updated agents");
         }
 
     } catch (error) {

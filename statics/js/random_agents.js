@@ -27,91 +27,10 @@ import {
 import vsGLSL from './shaders/vs_phong_302.glsl?raw';
 import fsGLSL from './shaders/fs_phong_302.glsl?raw';
 
+// Lists form the models used in the simulation
+import { BUILDING_MODELS, CAR_MODEL, WHEEL_MODEL, WHEEL_TEXTURE_PATH, ROAD_TEXTURE_PATH } from './libs/lists.js';
+
 const scene = new Scene3D();
-
-// Desired building height in "cells"
-const BUILDING_HEIGHT_CELLS = 6;  // for example, 6 cells high
-
-// List for the different building models, each one has different dimensions we will use for scaling in our model
-const BUILDING_MODELS = [
-  {
-    id: 'b1',
-    path: './models/objs/building1.obj',
-    mtl: './models/mtls/building1.mtl',
-    width: 10.46,
-    depth: 10.34,
-    height: 22.68,
-  },
-  {
-    id: 'b2',
-    path: './models/objs/building2.obj',
-    mtl: './models/mtls/building2.mtl',
-    width: 11.08,
-    depth: 11.00,
-    height: 38.71,
-  },
-  {
-    id: 'b3',
-    path: './models/objs/building3.obj',
-    mtl: './models/mtls/building3.mtl',
-    width: 17.46,
-    depth: 17.46,
-    height: 37.61,
-  },
-  {
-    id: 'b4',
-    path: './models/objs/building4.obj',
-    mtl: './models/mtls/building4.mtl',
-    width: 14.10,
-    depth: 14.10,
-    height: 55.61,
-  },
-];
-
-const CAR_MODEL = {
-  id: 'car',
-  path: './models/objs/lowpoly_car.obj',
-  mtl:  './models/mtls/lowpoly_car.mtl',
-  width:  2.7,   
-  depth:  4.8,  
-  height: 1.6,
-};
-
-const BUILDING_GLOBAL_SCALE = 1.0; // Global scale factor for buildings
-
-const CAR_GLOBAL_SCALE = 0.7; // Global scale factor for cars
-
-const maxBuildings = 320; // Maximum number of buildings to place
-
-const WHEEL_MODEL = {
-  id: 'wheel',
-  path: './models/objs/wheel.obj',
-  mtl: './models/mtls/wheel_basic.mtl',
-  width: 1.0,
-  depth: 1.0,
-  height: 1.0,
-};
-
-let buildingMeshes = {};
-let carMesh = null;
-let carTemplate = null;
-let wheelMesh = null;
-let wheelTemplate = null;
-let wheelTexture = null;
-
-const WHEEL_TEXTURE_PATH = './models/textures/wheel_texture.png';
-
-/*
-// Variable for the scene settings
-const settings = {
-    // Speed in degrees
-    rotationSpeed: {
-        x: 0,
-        y: 0,
-        z: 0,
-    },
-};
-*/
 
 // Global variables
 let colorProgramInfo = undefined;
@@ -119,13 +38,51 @@ let gl = undefined;
 const duration = 1000; // ms
 let elapsed = 0;
 let then = 0;
+const EPS = 0.0001; // Small epsilon to avoid division by zero when used in interpolations
 
-// For the traffic light lights in the simulation
+// 3D objects control variables
+const BUILDING_HEIGHT_CELLS = 6; // Height of buildings in cells
+
+const BUILDING_GLOBAL_SCALE = 1.0; // Global scale factor for buildings
+
+const CAR_GLOBAL_SCALE = 0.7; // Global scale factor for cars
+
+const maxBuildings = 320; // Maximum number of buildings to place
+
+// For the traffic light lights in the simulation and their illumination effect
 const MAX_TRAFFIC_LIGHTS = 16;
-let activeTraffcLightsPositions = new Float32Array(MAX_TRAFFIC_LIGHTS * 3);
-let activeTraffcLightsColors = new Float32Array(MAX_TRAFFIC_LIGHTS * 3);
+let activeTraffcLightsPositions = new Float32Array(MAX_TRAFFIC_LIGHTS * 3); // x, y, z for each light
+let activeTraffcLightsColors = new Float32Array(MAX_TRAFFIC_LIGHTS * 3); // r, g, b for each light
 let activeTrafficLightCount = 0;
 const TRAFFIC_LIGHT_MAX_RADIUS = 8.0;
+
+// Textures paths
+let buildingMeshes = {}; // To store building meshes loaded from files
+let carMesh = null; // To store car mesh loaded from file
+let carTemplate = null; // Template for car objects
+let wheelMesh = null; // To store wheel mesh loaded from file
+let wheelTemplate = null; // Template for wheel objects
+let wheelTexture = null; // Texture for wheels
+let roadTexture = null; // Texture for roads
+
+// Variable for the scene settings
+const settings = {
+    camDistance: 10,
+    camAzimuth: 4,
+    camElevation: 0.8,
+    trafficIntensity: 0.6,
+    sceneBrightness: 1.0,
+};
+
+// Function to update the camera parameters from the settings with the UI
+function updateCamera() {
+  const cam = scene.camera;
+  if (!cam) return;
+
+  cam.distance  = settings.camDistance;
+  cam.azimuth   = settings.camAzimuth;
+  cam.elevation = settings.camElevation;
+}
 
 // Main function is async to be able to make the requests
 async function main() {
@@ -148,7 +105,7 @@ async function main() {
     ]);
 
     const mtlText = await mtlRes.text();
-    loadMtl(mtlText);   // llena el diccionario global "materials" en obj_loader.js
+    loadMtl(mtlText);
 
     const objText = await objRes.text();
     buildingMeshes[model.id] = objText;
@@ -183,6 +140,12 @@ async function main() {
     flipY: true,
   });
 
+  // Load road texture
+  roadTexture = twgl.createTexture(gl, {
+    src: ROAD_TEXTURE_PATH,
+    flipY: true,
+  });
+
   // Initialize the agents model
   await initAgentsModel();
 
@@ -209,10 +172,11 @@ async function main() {
 
 
 function setupScene() {
-  let camera = new Camera3D(0,
-    10,             // Distance to target
-    4,              // Azimut
-    0.8,              // Elevation
+  let camera = new Camera3D(
+    0,
+    settings.camDistance, // Distance to target
+    settings.camAzimuth, // Azimut
+    settings.camElevation, // Elevation
     [0, 0, 10],
     [0, 0, 0]);
   // These values are empyrical.
@@ -220,6 +184,8 @@ function setupScene() {
   camera.panOffset = [0, 8, 0];
   scene.setCamera(camera);
   scene.camera.setupControls();
+  // Updates the camera when is updated from the UI
+  updateCamera();
 }
 
 function setupObjects(scene, gl, programInfo) {
@@ -265,6 +231,9 @@ function setupObjects(scene, gl, programInfo) {
     road.vao = baseCube.vao;
     road.scale = { x: 0.5, y: 0.5, z: 0.5 };
     road.material = 'ground';
+    road.isRoad = true;
+    road.texture = roadTexture;
+    road.color = [1.0, 1.0, 1.0, 1.0]; // White color for the roads
     scene.addObject(road);
   }
 
@@ -320,7 +289,7 @@ function setupObjects(scene, gl, programInfo) {
     [buildingCells[i], buildingCells[j]] = [buildingCells[j], buildingCells[i]];
   }
 
-  let buildingCount = 0;
+  let buildingCount = 0; // Count of buildings placed
   const cellsWithBuilding = new Set();
 
   for (const cell of buildingCells) {
@@ -366,16 +335,17 @@ function setupObjects(scene, gl, programInfo) {
     cellsWithBuilding.add(cell);
   }
 
-  // For the rest of the buildings places that are free, and are obstacles, change their color to greenish
+  // For the rest of the buildings places that are free, and are obstacles, change their color to green
   for (const obstacle of obstacles) {
     if (!scene.objects.includes(obstacle)) continue; // Skip if not in scene
-    obstacle.color = [0.2, 0.6, 0.2, 1.0]; // Greenish color
+    obstacle.color = [0.2, 0.6, 0.2, 1.0]; // Green color
   }
-  // Finally, synchronize car objects
+  // Synchronize car objects with the cars array
   syncCarObjects();
 }
 
-function updateTrafficLights() { // Update the active traffic lights arrays for the shader for the lights effect
+// Function to update the active traffic lights arrays for the shader for the lights effect
+function updateTrafficLights() { 
   const camPos = scene.camera.posArray;
   const candidates = [];
 
@@ -392,41 +362,42 @@ function updateTrafficLights() { // Update the active traffic lights arrays for 
     candidates.push({ light, distSq });
   }
 
-  // Sort by distance
+  // Sort the traffic lights by their distance
   candidates.sort((a, b) => a.distSq - b.distSq);
 
-  activeTrafficLightCount = Math.min(candidates.length, MAX_TRAFFIC_LIGHTS);
+  activeTrafficLightCount = Math.min(candidates.length, MAX_TRAFFIC_LIGHTS); // Number of active traffic lights
+
+  const intensity = settings.trafficIntensity ?? 1.0; // Intensity from settings, showing how brighter the traffic lights are
 
   for (let i = 0; i < activeTrafficLightCount; i++) {
-    const light = candidates[i].light;
-    const p = light.posArray;
+    const light = candidates[i].light; // Current traffic light
+    const p = light.posArray; // Position of the traffic light
 
-    const c = light.color;
+    const c = light.color; // Color of the traffic light
 
-    const idx = i * 3;
+    const idx = i * 3; // Index in the arrays for this traffic light, Based on 3 components per light and position in the simulation
 
     activeTraffcLightsPositions[idx] = p[0];
-    activeTraffcLightsPositions[idx + 1] = p[1] + 0.1; // Slightly above the light
+    activeTraffcLightsPositions[idx + 1] = p[1];
     activeTraffcLightsPositions[idx + 2] = p[2];
 
-    activeTraffcLightsColors[idx] = c[0];
-    activeTraffcLightsColors[idx + 1] = c[1];
-    activeTraffcLightsColors[idx + 2] = c[2];
+    activeTraffcLightsColors[idx] = c[0] * intensity;
+    activeTraffcLightsColors[idx + 1] = c[1] * intensity;
+    activeTraffcLightsColors[idx + 2] = c[2] * intensity;
   }
 }
 
 // Function to convert direction vector to angle in radians around Z and X axis
-
 function directionToAngleY(dir) {
-  if (typeof dir === 'string') {
+  if (typeof dir === 'string') { // Using typeof to avoid issues with undefined, and to extract the value
     switch (dir) {
-      case 'Down':  // +Z
+      case 'Down': // +Z
         return Math.PI;
-      case 'Up':    // -Z
+      case 'Up': // -Z
         return 0.0;
       case 'Right': // +X
         return Math.PI * 0.5;
-      case 'Left':  // -X
+      case 'Left': // -X
         return -Math.PI * 0.5;
       default:
         return 0.0;
@@ -435,13 +406,12 @@ function directionToAngleY(dir) {
   return 0.0;
 }
 
-// Linear interpolation between two angles a and b by factor t (0 to 1)
-
+// Linear interpolation between two angles a and b by factor t in between 0 and 1
 function lerpAngle(a, b, t) {
-  let diff = b - a;
-  while (diff < -Math.PI) diff += 2 * Math.PI;
+  let diff = b - a; // Difference between angles
+  while (diff < -Math.PI) diff += 2 * Math.PI; // Wrap around
   while (diff > Math.PI) diff -= 2 * Math.PI;
-  return a + diff * t;
+  return a + diff * t; // Interpolated angle
 }
 
 // Function to synchronize car objects in the scene with the cars array in the API connection
@@ -450,17 +420,16 @@ function syncCarObjects() {
 
   const aliveCars = new Set(cars.map(car => car.id));
 
-  // Remove cars that are no longer present
-
+  // Remove cars that have reached their destination
   scene.objects = scene.objects.filter(obj => {
-    if (!obj.isCar) return true; // if an object is not a car, keep it 
-    return aliveCars.has(obj.id); // keep only cars that haven't get to their destination
+    if (!obj.isCar) return true; // If an object is not a car, keep it 
+    return aliveCars.has(obj.id); // Keep only cars that haven't get to their destination
   });
 
   // Remove the wheels of removed cars
   scene.objects = scene.objects.filter(obj => {
-    if (!obj.isWheel) return true; // if an object is not a wheel, keep it
-    return aliveCars.has(obj.parentCar.id); // keep only wheels of cars that haven't get to their destination
+    if (!obj.isWheel) return true; // If an object is not a wheel, keep it
+    return aliveCars.has(obj.parentCar.id); // Keep only wheels of cars that haven't get to their destination
   });
 
   for (const car of cars) {
@@ -478,7 +447,7 @@ function syncCarObjects() {
       z: baseXZ,
     };
 
-    car.color = [1.0, 1.0, 1.0, 1.0];   // White color 
+    car.color = [1.0, 1.0, 1.0, 1.0]; // White color for loading correctly the texture of the material
     car.isCar = true;
     car.isBuilding = true; // To use building shader features
 
@@ -505,7 +474,7 @@ function syncCarObjects() {
       const frontOffset = carLengthWorld * FRONT_FACTOR;
       const wheelHeight = carHeightWorld * HEIGHT_FACTOR;
 
-      const wheelOffsets = [
+      const wheelOffsets = [ // Adjusted manually to fit the car model
         {name: 'front_left',  offset: [-sideOffset + 0.04, wheelHeight + 0.38, -frontOffset + 0.09]},
         {name: 'front_right', offset: [sideOffset - 0.04, wheelHeight + 0.38, -frontOffset + 0.09]},
         {name: 'rear_left',   offset: [-sideOffset + 0.04, wheelHeight + 0.38, frontOffset - 0.09]},
@@ -533,7 +502,7 @@ function syncCarObjects() {
         const wheelRadiusWorld = carHeightWorld * 0.15;
         const wheelThicknessWorld = carWidthWorld * 0.3;
 
-        // Scale the wheel appropriately
+        // Scale the wheel acording to the car dimensions
         wheel.scale = {
           x: wheelThicknessWorld,
           y: wheelRadiusWorld,
@@ -548,6 +517,7 @@ function syncCarObjects() {
         scene.addObject(wheel);
       }
     }
+    
     // For the starting position, set the target angle based on the direction of the street
     if (car.targetAngleY === undefined || car.oldAngle === undefined) {
       const basePos = car.posArray || car.serverPos;
@@ -573,8 +543,7 @@ function syncCarObjects() {
       const dx = car.serverPos[0] - car.oldServerPos[0];
       const dz = car.serverPos[2] - car.oldServerPos[2];
 
-      const lenSq = dx * dx + dz * dz;
-      const EPS = 1e-6;
+      const lenSq = dx * dx + dz * dz; // Length squared of the movement vector
 
       if (lenSq > EPS) {
         const newAngle = Math.atan2(dx, dz); // Angle in radians
@@ -635,33 +604,19 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
     }
 
     // Update wheels positions based on interpolated car position
-
     if (!object.lastInterpPos) {
       object.lastInterpPos = [...carInterpPos];
       object.wheelSpin = 0;
     }
 
-    const ESP = 0.0001; // Small epsilon to avoid division by zero
     const dx = carInterpPos[0] - object.lastInterpPos[0];
     const dz = carInterpPos[2] - object.lastInterpPos[2];
     const dist = Math.sqrt(dx * dx + dz * dz);
 
-    if (dist > ESP) {
-      const yaw = object.rotRad.y;
-      const forwardX = Math.sin(yaw);
-      const forwardZ = Math.cos(yaw);
+    const WHEEL_R = 0.3; // Approximate wheel radius in world units
+    object.wheelSpin += (dist / WHEEL_R);
 
-      const moveX = dx;
-      const moveZ = dz;
-
-      const dot = forwardX * moveX + forwardZ * moveZ;
-      const sign = dot >= 0 ? 1 : -1;
-
-      const WHEEL_R = 0.3; // Approximate wheel radius
-      object.wheelSpin += (dist / WHEEL_R);
-    }
-
-    object.lastInterpPos = carInterpPos
+    object.lastInterpPos = carInterpPos; // Update last interpolated position
 
     v3_tra = [carInterpPos[0], carInterpPos[1] + 0.3, carInterpPos[2]];
   } else {
@@ -670,37 +625,37 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   }
 
   if (object.isWheel){
-    const car = object.parentCar;
+    const car = object.parentCar; // Get the parent car object
     if (!car){
       v3_tra = object.posArray;
     } else {
       // Recalculate wheel position based on car position and local offset
       const carPos = car.currentInterpPos || car.posArray;
 
-      const [lx, ly, lz] = object.localOffset;
-      const angleY = car.rotRad.y;
+      const [lx, ly, lz] = object.localOffset; // Local offset of the wheel
+      const angleY = car.rotRad.y; // Car rotation around Y axis
 
-      const cosY = Math.cos(angleY);
+      const cosY = Math.cos(angleY); 
       const sinY = Math.sin(angleY);
 
       const offsetX = lx * cosY + lz * sinY;
       const offsetZ = -lx * sinY + lz * cosY;
 
-      const modelCenterY = 0.5;
-      const wheelScaleY = object.scale ? object.scale.y : object.scaArray[1];
-      const centerOffsetY = modelCenterY * wheelScaleY;
+      const modelCenterY = 0.5; // Assuming wheel model is centered at Y=0.5, adjusted by testing
+      const wheelScaleY = object.scale ? object.scale.y : object.scaArray[1]; // Get the scale in Y
+      const centerOffsetY = modelCenterY * wheelScaleY; // Calculate center offset in world units
 
       const worldX = carPos[0] + offsetX;
-      const worldY = carPos[1] + ly - centerOffsetY;
+      const worldY = carPos[1] + ly - centerOffsetY; // Adjust for wheel model center
       const worldZ = carPos[2] + offsetZ;
 
-      v3_tra = [worldX, worldY + 0.1, worldZ];
+      v3_tra = [worldX, worldY + 0.1, worldZ]; // Slightly raise the wheel to avoid z-fighting
 
-      object.setPosition(v3_tra);
+      object.setPosition(v3_tra); // Update wheel position
 
-      object.rotRad.y = angleY;
+      object.rotRad.y = angleY; // Rotate wheel around Y axis with the car
 
-      object.rotRad.x = (car.wheelSpin || 0);
+      object.rotRad.x = (car.wheelSpin || 0); // Rotate wheel around X axis based on wheel spin
     }
   }
 
@@ -729,12 +684,23 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   // Matrix to transform normals
   const worldInverse = M4.inverse(world);
 
-  // Determine if the object is a building
+  // Determine if the object category flags for the shader, use of textures, and other specific parameters for specular, diffuse and ambient light
   const isBuilding = object.isBuilding === true;
   const isGround = object.material === 'ground';
   const isTrafficLight = object.isTrafficLight === true;
   const isWheel = object.isWheel === true;
-  const useTexture = isWheel && wheelTexture ? 1 : 0;
+  const isRoad = object.isRoad === true;
+  const useTexture = isWheel || isRoad;
+
+  let roadDir = [0.0, 0.0]; // Default road direction for the texture placing
+  if (isRoad && object.direction) {
+    const d = object.direction;
+    if (d === 'Up' || d === 'Down') {
+      roadDir = [1.0, 0.0]; // Z direction
+    } else if (d === 'Left' || d === 'Right') {
+      roadDir = [0.0, 1.0]; // X direction
+    }
+  }
 
   let trafficColor = [1.0, 0.1, 0.1, 1.0]; // Default to red
   if (isTrafficLight && object.color) {
@@ -754,7 +720,7 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
   // Light position
   const lightPos = [20, 30, 20];
 
-  // Setting ambient, diffuse and specular light properties for the simulation depending in the material
+  // Setting ambient, diffuse and specular light properties for the simulation depending in the object type
   let ambientLight, diffuseLight, specularLight, shininess;
   if (isGround) { // For the ground plane
     ambientLight  = [1.0, 1.0, 1.0, 1.0];
@@ -774,7 +740,13 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
     shininess = 20.0;
   }
 
-  // Uniforms expected by the Phong shaders
+  // Adjust light colors based on scene brightness
+  const sceneBrightness = settings.sceneBrightness ?? 1.0;
+  ambientLight = ambientLight.map(c => c * sceneBrightness);
+  diffuseLight = diffuseLight.map(c => c * sceneBrightness);
+  specularLight = specularLight.map(c => c * sceneBrightness);
+
+  // Uniforms expected by the shader programs
   const uniforms = {
     // Scene
     u_lightWorldPosition: lightPos,
@@ -802,6 +774,8 @@ function drawObject(gl, programInfo, object, viewProjectionMatrix, fract) {
     // Flags 0 or 1 for the shader
 
     u_isBuilding: isBuilding ? 1 : 0,
+    u_isRoad: isRoad ? 1 : 0,
+    u_roadDir : roadDir,
 
     // Shininess
     u_shininess: shininess,
@@ -836,13 +810,12 @@ async function drawScene() {
   gl.clearColor(0, 0, 0, 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  // tell webgl to cull faces
+  // Tell webgl to cull faces
   gl.enable(gl.CULL_FACE);
   gl.enable(gl.DEPTH_TEST);
 
   scene.camera.checkKeys();
   updateTrafficLights();
-  //console.log(scene.camera);
   const viewProjectionMatrix = setupViewProjection(gl);
 
   // Draw the objects
@@ -855,7 +828,7 @@ async function drawScene() {
   if (elapsed >= duration) {
     elapsed = 0;
     await update();
-    syncCarObjects();
+    syncCarObjects(); // Synchronize car objects with the cars array
   }
 
   requestAnimationFrame(drawScene);
@@ -880,20 +853,39 @@ function setupViewProjection(gl) {
   return viewProjectionMatrix;
 }
 
-// Setup a ui.
+// Setup a ui for the settings of the camera and traffic lights
 function setupUI() {
-  /*
   const gui = new GUI();
 
-  // Settings for the animation
-  const animFolder = gui.addFolder('Animation:');
-  animFolder.add( settings.rotationSpeed, 'x', 0, 360)
-      .decimals(2)
-  animFolder.add( settings.rotationSpeed, 'y', 0, 360)
-      .decimals(2)
-  animFolder.add( settings.rotationSpeed, 'z', 0, 360)
-      .decimals(2)
-  */
+  // Settings for the camera movement
+  const camFolder = gui.addFolder('Cámara');
+  camFolder
+    .add(settings, 'camAzimuth', 0, Math.PI * 2, 0.01)
+    .name('Azimut')
+    .onChange(updateCamera);
+  camFolder
+    .add(settings, 'camElevation', 0.1, Math.PI / 2, 0.01)
+    .name('Elevation')
+    .onChange(updateCamera);
+  camFolder
+    .add(settings, 'camDistance', 5, 40, 0.1)
+    .name('Distance')
+    .onChange(updateCamera);
+  
+  // Settings for the traffic lights intensity
+  const lightFolder = gui.addFolder('Traffic Lights');
+  lightFolder
+    .add(settings, 'trafficIntensity', 0.0, 2.0, 0.01)
+    .name('Brightness');
+
+  // Settings for the scene brightness
+  const sceneFolder = gui.addFolder('Scene');
+  sceneFolder
+    .add(settings, 'sceneBrightness', 0.0, 2.0, 0.01)
+    .name('Brightness');
+  camFolder.close();
+  lightFolder.close();
+  sceneFolder.close();
 }
 
 main();

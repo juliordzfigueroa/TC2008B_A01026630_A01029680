@@ -2,7 +2,7 @@
 in vec4 a_position; // input | unique atributes for each vertex
 in vec3 a_normal;
 in vec4 a_color; 
-in vec2 a_texCoord;
+in vec2 a_texCoord; // Used in textures as an array of coordenates in 2D
 
 // Scene uniforms
 uniform vec3 u_lightWorldPosition; // atributes for all vertexes
