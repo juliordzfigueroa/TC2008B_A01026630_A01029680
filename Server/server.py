@@ -1,7 +1,7 @@
 from traffic_model.agent import *
 from traffic_model.model import CityModel
 
-from mesa.visualization import SolaraViz, make_space_component
+from mesa.visualization import SolaraViz, make_space_component, Slider
 from mesa.visualization.components import AgentPortrayalStyle
 import matplotlib.pyplot as plt
 import solara
@@ -60,10 +60,15 @@ model_params = {
         "value": 42,
         "label": "Random Seed",
     },
+    "spawn_interval": Slider("Spawn interval (steps)", 1, 1, 10, 1),
 }
 
 # Create the model
-model = CityModel(model_params["N"])
+model = CityModel(
+    model_params["N"],
+    seed=model_params["seed"]["value"],
+    spawn_interval=model_params["spawn_interval"].value,
+)
 
 # Space component
 space_component = make_space_component(
