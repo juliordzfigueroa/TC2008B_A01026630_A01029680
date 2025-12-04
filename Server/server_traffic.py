@@ -1,14 +1,14 @@
-# TC2008B. Sistemas Multiagentes y Gráficas Computacionales
+# TC2008B. Traffic Simulation with Mesa and WebGL
 # Jin Sik Yoon A01026630 
 # Julio César Rodríguez Figueroa A01029680
-# Servidor de Python flask para interactuar con JavaScript
+# Python Flask server to interact with a traffic simulation API.
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS, cross_origin
 from traffic_model.model import CityModel
 from traffic_model.agent import Road, Traffic_Light, Obstacle, Destination, Car
 
-# Parametros del modelo
+# Model parameters
 model = None
 currentStep = 0
 
@@ -23,7 +23,7 @@ cors = CORS(app, origins=['http://localhost'])
 def initModel():
     global currentStep, model
 
-    # Siempre tener un valor por defecto
+    # Always have a default value although it isnt used if a POST request is made
     number_agents = 5  
 
     if request.method == 'POST':
@@ -54,7 +54,6 @@ def getCars():
             agentCells = model.grid.all_cells.select(
                 lambda cell: any(isinstance(obj, Car) for obj in cell.agents)
             ).cells
-            # print(f"CELLS: {agentCells}")
 
             agents = [
                 (cell.coordinate, agent)
@@ -62,13 +61,11 @@ def getCars():
                 for agent in cell.agents
                 if isinstance(agent, Car)
             ]
-            # print(f"AGENTS: {agents}")
 
             agentPositions = [
                 {"id": str(a.unique_id), "x": coordinate[0], "y":1, "z":coordinate[1]}
                 for (coordinate, a) in agents
             ]
-            # print(f"AGENT POSITIONS: {agentPositions}")
 
             return jsonify({'positions': agentPositions})
         except Exception as e:
@@ -89,7 +86,6 @@ def getObstacles():
             obstacleCells = model.grid.all_cells.select(
                 lambda cell: any(isinstance(obj, Obstacle) for obj in cell.agents)
             )
-            # print(f"CELLS: {agentCells}")
 
             agents = [
                 (cell.coordinate, agent)
@@ -97,13 +93,11 @@ def getObstacles():
                 for agent in cell.agents
                 if isinstance(agent, Obstacle)
             ]
-            # print(f"AGENTS: {agents}")
 
             obstaclePositions = [
                 {"id": str(a.unique_id), "x": coordinate[0], "y":1, "z":coordinate[1]}
                 for (coordinate, a) in agents
             ]
-            # print(f"OBSTACLE POSITIONS: {obstaclePositions}")
 
             return jsonify({'positions': obstaclePositions})
         except Exception as e:
@@ -135,7 +129,6 @@ def getTrafficLights():
                 {"id": str(a.unique_id), "x": coordinate[0], "y":1, "z":coordinate[1], "state": a.state}
                 for (coordinate, a) in agents
             ]
-            # print(f"TRAFFIC LIGHT POSITIONS: {trafficLightPositions}")
 
             return jsonify({'positions': trafficLightPositions})
         except Exception as e:
@@ -167,7 +160,6 @@ def getDestinations():
                 {"id": str(a.unique_id), "x": coordinate[0], "y":1, "z":coordinate[1]}
                 for (coordinate, a) in agents
             ]
-            # print(f"DESTINATION POSITIONS: {destinationPositions}")
 
             return jsonify({'positions': destinationPositions})
         except Exception as e:
@@ -199,7 +191,6 @@ def getRoads():
                 {"id": str(a.unique_id), "x": coordinate[0], "y":1, "z":coordinate[1], "direction": a.direction}
                 for (coordinate, a) in agents
             ]
-            # print(f"ROAD POSITIONS: {roadPositions}")
 
             return jsonify({'positions': roadPositions})
         except Exception as e:

@@ -25,6 +25,8 @@ uniform float u_shininess;
 
 uniform float u_isBuilding;
 uniform float u_isTrafficLight;
+uniform float u_isRoad;
+uniform vec2 u_roadDir;
 
 uniform vec4 u_trafficColor;
 
@@ -57,9 +59,22 @@ void main() {
     vec4 baseAmbientColor = mix(u_ambientColor, v_color, u_isBuilding); // Ambient color for teh buildings
 
     // If the object has texture
-
     if (u_useTexture == 1){
-        vec4 tex = texture(u_diffuseMap, v_texCoord);
+        vec4 tex;
+
+        if (u_isRoad > 0.5){ // If the object is a road
+            vec2 coord = v_worldPos.xz;
+
+            vec2 local = fract(coord + 0.5);
+
+            if (u_roadDir.x > 0.5){
+                local = local.yx;
+            }
+            tex = texture(u_diffuseMap, local);
+        } else {
+            tex = texture(u_diffuseMap, v_texCoord);
+        }
+
         baseDiffuseColor *= tex;
         baseAmbientColor *= tex;
     }
