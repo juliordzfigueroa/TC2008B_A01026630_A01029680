@@ -112,8 +112,7 @@ def stats_component(model):
     if running:
         status = "Running"
     else:
-        reason = getattr(model, "stopped_reason", None)
-        status = f"Stopped{f' ({reason})' if reason else ''}"
+        status = "Stopped"
 
     return solara.Markdown(
         f"""### Simulation metrics:
