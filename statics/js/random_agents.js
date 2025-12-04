@@ -421,9 +421,9 @@ function directionToAngleY(dir) {
   if (typeof dir === 'string') {
     switch (dir) {
       case 'Down':  // +Z
-        return 0.0;
-      case 'Up':    // -Z
         return Math.PI;
+      case 'Up':    // -Z
+        return 0.0;
       case 'Right': // +X
         return Math.PI * 0.5;
       case 'Left':  // -X
