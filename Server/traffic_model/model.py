@@ -3,6 +3,7 @@ from mesa.discrete_space import OrthogonalMooreGrid                     # Grid w
 from .agent import Car, Traffic_Light, Obstacle, Destination, Road      # Import agents
 import json, random                                                     # For map loading and randomness
 from mesa.datacollection import DataCollector                           # For data collection
+import requests
 
 # Urban traffic model using cars, traffic lights, roads, obstacles, and destinations.
 # Cars navigate the map using BFS and avoid collisions and red traffic lights.
@@ -195,3 +196,28 @@ class CityModel(Model):
         # Collect stats
         if hasattr(self, "datacollector"):
             self.datacollector.collect(self)
+
+        # API connection for validation attempt
+        url = "http://10.49.12.39:5000/api/"
+        endpoint = "validate_attempt"
+
+        data = {
+            "year" : 2025,
+            "classroom" : 302,
+            "name" : "JJs",
+            "current_cars": 50,
+            "total_arrived": 10,
+            "current_cars": len(self.cars),
+            "total_arrived": self.total_arrived,
+            "attempt_number": 5
+        }
+
+        headers = {
+            "Content-Type": "application/json"
+        }
+
+        response = requests.post(url+endpoint, data=json.dumps(data), headers=headers)
+        print(data)
+
+        print("Request " + "successful" if response.status_code == 200 else "failed", "Status code:", response.status_code)
+        print("Response:", response.json())
