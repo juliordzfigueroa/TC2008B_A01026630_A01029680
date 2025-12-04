@@ -157,6 +157,23 @@ class CityModel(Model):
 
         self.last_spawn_step = self.steps
         return spawned_count
+    
+    # Remove cars that have arrived at their destination
+    def cleanup_arrived(self):
+        arrived = [c for c in list(self.cars) if getattr(c, "arrived", False)]
+        for c in arrived:
+            # Remove from cell agent list if present
+            if hasattr(c, "cell") and getattr(c.cell, "agents", None) is not None:
+                agents = c.cell.agents
+                if c in agents:
+                    agents.remove(c)
+            
+            # Remove from model list
+            if c in self.cars:
+                self.cars.remove(c)
+            
+            # Update arrived counter
+            self.total_arrived += 1
 
     # Step the model
     def step(self):
@@ -171,7 +188,9 @@ class CityModel(Model):
             # If there are exactly 4 start positions and none spawned, stop simulation
             if len(self.start_positions) == 4 and spawned == 0:
                 self.running = False
-                self.stopped_reason = "All 4 spawnpoints blocked on spawn step"
+        
+        # Cleanup arrived cars
+        self.cleanup_arrived()
 
         # Collect stats
         if hasattr(self, "datacollector"):
