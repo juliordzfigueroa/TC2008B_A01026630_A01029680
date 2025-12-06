@@ -115,8 +115,26 @@ deactivate (Para desactivar)
 ```bash
 pip install -U "mesa[all]"
 ```
-### 5. Ejecutar la simulación de Solara
+### 5. Instalar Flask y Flask CORS
 
 ```bash
-solara run server.py
+pip install flask flask cors
 ```
+
+### 6. Acceder a la carpeta Server y corree
+```bash
+python traffic_server.py
+```
+
+### 7. Regresar a la carpeta de raiz del repositorio y hacer el comando para instalar node modules
+```bash
+npm install 
+```
+
+### 8. En la misma carpeta de origen usar el comando para prender el servidor
+```bash
+npx vite
+```
+
+### Acceder al proyecto usando la siguiente URL:
+localhost:5173/statics/index.html
